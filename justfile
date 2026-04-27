@@ -46,16 +46,16 @@ pve-list:
 # Pré-requis: clé tailscale dans {{ts_key}}, clé SSH dans {{key}}.
 # Déploie les 3 nœuds en parallèle via nixos-anywhere (recréation propre)
 deploy:
-    distrobox enter nix-deploy -- bash -lc 'cd {{justfile_directory()}} && ./scripts/02-install-all-parallel.sh'
+    distrobox enter nix-deploy -- bash -lc 'cd {{justfile_directory()}} && ./proxmox/install-nixos.sh'
 
 # Recrée les 3 VMs sur Proxmox depuis le template
 recreate:
     ssh root@proxade 'for vm in 301 302 303; do qm stop $vm 2>/dev/null; sleep 1; qm destroy $vm --purge 1 2>/dev/null || true; done'
-    ssh root@proxade bash -s < {{justfile_directory()}}/scripts/01-create-k3s-vms.sh
+    ssh root@proxade bash -s < {{justfile_directory()}}/proxmox/create-vms.sh
 
 # Reconstruit + active la config NixOS sur les nœuds existants (pas de recréation)
 switch:
-    distrobox enter nix-deploy -- bash -lc 'cd {{justfile_directory()}} && ./scripts/03-switch-nixos.sh'
+    distrobox enter nix-deploy -- bash -lc 'cd {{justfile_directory()}} && ./proxmox/switch-nixos.sh'
 
 # Pipeline complet: destroy -> recreate -> deploy
 redeploy: recreate wait-ssh deploy

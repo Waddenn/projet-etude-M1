@@ -110,7 +110,7 @@ in
 
     appsPath = lib.mkOption {
       type = lib.types.str;
-      default = "infrastructure/proxmox-k3s/k8s/applications";
+      default = "kubernetes/applications";
       description = "Chemin dans le repo où vivent les Applications enfants.";
     };
   };

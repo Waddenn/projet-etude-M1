@@ -21,7 +21,7 @@ export PROJET_K3S_KEY="$(pwd)/secrets/ssh-deploy-key"
 export TS_AUTH_KEY_FILE="$(pwd)/secrets/tailscale-authkey"
 ```
 
-(Ou en restant à la racine de `infrastructure/proxmox-k3s/` les valeurs
+(Ou en restant à la racine de `racine du repo` les valeurs
 par défaut pointent déjà ici.)
 
 ## In-repo encrypted secrets (sops-nix)
