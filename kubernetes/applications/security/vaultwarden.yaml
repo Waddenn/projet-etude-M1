@@ -25,7 +25,8 @@ spec:
 
         # Pas d'admin token pour l'instant (panel /admin désactivé).
         # On l'ajoutera via ESO + sops après le bootstrap initial.
-        adminToken: ""
+        adminToken:
+          value: ""
 
         # Stockage par node (sqlite est suffisant pour un projet d'étude).
         database:
