@@ -47,6 +47,9 @@ spec:
             ruleSelectorNilUsesHelmValues: false
         grafana:
           adminPassword: admin
+          service:
+            type: NodePort
+            nodePort: 30030
           persistence:
             enabled: true
             storageClassName: local-path

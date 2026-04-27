@@ -28,6 +28,36 @@ let
     ' ${argo-cd}/manifests/install.yaml > $out
   '';
 
+  # Service NodePort additionnel pour exposer l'UI ArgoCD sur un port stable
+  # de l'hôte (utilisé par tailscale serve). Ne touche pas au svc argocd-server
+  # original (ClusterIP) qui reste géré par le manifest k3s.
+  argocdServerNodePort = pkgs.writeText "20-argocd-server-nodeport.yaml" ''
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: argocd-server-ext
+      namespace: argocd
+      labels:
+        app.kubernetes.io/component: server
+        app.kubernetes.io/name: argocd-server
+        app.kubernetes.io/part-of: argocd
+    spec:
+      type: NodePort
+      selector:
+        app.kubernetes.io/name: argocd-server
+      ports:
+        - name: https
+          port: 443
+          protocol: TCP
+          targetPort: 8080
+          nodePort: 30443
+        - name: http
+          port: 80
+          protocol: TCP
+          targetPort: 8080
+          nodePort: 30080
+  '';
+
   # Root Application "app of apps" : ArgoCD scanne le dossier git puis
   # synchronise tout ce qu'il y trouve (les Applications enfants).
   rootApp = pkgs.writeText "99-argocd-root-app.yaml" ''
@@ -96,6 +126,7 @@ in
     systemd.tmpfiles.settings."10-projet-argocd" = {
       "${manifestsDir}/00-argocd-namespace.yaml"."L+".argument = toString argocdNamespace;
       "${manifestsDir}/10-argocd-install.yaml"."L+".argument = toString argocdInstall;
+      "${manifestsDir}/20-argocd-server-nodeport.yaml"."L+".argument = toString argocdServerNodePort;
       "${manifestsDir}/99-argocd-root-app.yaml"."L+".argument = toString rootApp;
     };
   };

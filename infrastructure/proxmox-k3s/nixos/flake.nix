@@ -32,6 +32,7 @@
           ./modules/common.nix
           ./modules/secrets.nix
           ./modules/tailscale.nix
+          ./modules/tailscale-serve.nix
           ./modules/k3s-${role}.nix
           ./hosts/${name}.nix
           {

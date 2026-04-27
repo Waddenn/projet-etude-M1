@@ -10,4 +10,16 @@
     repoUrl = "https://github.com/Waddenn/projet-etude-M1.git";
     targetRevision = "main";
   };
+
+  # Exposition Tailnet des UIs déployées dans le cluster.
+  # Les ports NodePort correspondants sont définis :
+  #  - 30443 : argocd-server-ext (cf. modules/k8s-bootstrap.nix)
+  #  - 30030 : kps-grafana       (cf. k8s/applications/monitoring/kube-prometheus-stack.yaml)
+  projet.tailscaleServe = {
+    enable = true;
+    routes = {
+      "443"  = "https+insecure://localhost:30443";
+      "8443" = "http://localhost:30030";
+    };
+  };
 }
