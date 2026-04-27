@@ -1,0 +1,70 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vaultwarden
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://guerzon.github.io/vaultwarden
+    chart: vaultwarden
+    targetRevision: 0.32.5
+    helm:
+      releaseName: vaultwarden
+      values: |
+        # URL publique tailnet, sert au CSRF check + clients Bitwarden
+        domain: https://k3s-cp-1.salamander-scala.ts.net:9443
+
+        # Bootstrap : on autorise un signup pour créer l'admin, puis on
+        # repassera ce flag à false dans un commit ultérieur.
+        signupsAllowed: true
+        invitationsAllowed: false
+        webVaultEnabled: true
+
+        # Pas d'admin token pour l'instant (panel /admin désactivé).
+        # On l'ajoutera via ESO + sops après le bootstrap initial.
+        adminToken: ""
+
+        # Stockage par node (sqlite est suffisant pour un projet d'étude).
+        database:
+          type: default
+
+        storage:
+          enabled: true
+          existingVolumeClaim: ""
+          size: 5Gi
+          class: local-path
+
+        # Service exposé en NodePort pour tailscale-serve (cf. tailscale-serve.nix).
+        service:
+          type: NodePort
+          nodePorts:
+            http: 30808
+          sessionAffinity: ClientIP
+
+        # Resources adaptées à un lab 3×6 Go.
+        resources:
+          requests: { cpu: 30m, memory: 64Mi }
+          limits:   { memory: 256Mi }
+
+        # Secrets Manager (expérimental Vaultwarden, équivalent BWS).
+        # On l'active via env var, voir https://github.com/dani-garcia/vaultwarden/wiki/Secrets-Manager
+        # NB: à ce jour le chart ne l'expose pas en option dédiée, on passe par envRaw.
+        envRaw:
+          - name: EXPERIMENTAL_CLIENT_FEATURE_FLAGS
+            value: "secrets-manager"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: security
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }
