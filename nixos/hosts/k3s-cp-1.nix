@@ -15,13 +15,13 @@
   # Les ports NodePort correspondants sont définis :
   #  - 30443 : argocd-server-ext     (modules/k8s-bootstrap.nix)
   #  - 30030 : kube-prometheus-stack-grafana (kubernetes/applications/monitoring/kube-prometheus-stack.yaml)
-  #  - 30808 : vaultwarden            (kubernetes/applications/security/vaultwarden.yaml)
+  #  - 30808 : infisical-ext          (kubernetes/extras/security/infisical-nodeport.yaml)
   projet.tailscaleServe = {
     enable = true;
     routes = {
       "443"  = "https+insecure://localhost:30443";  # ArgoCD
       "8443" = "http://localhost:30030";             # Grafana
-      "9443" = "http://localhost:30808";             # Vaultwarden
+      "9443" = "http://localhost:30808";             # Infisical
     };
   };
 }
