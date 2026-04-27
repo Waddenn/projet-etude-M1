@@ -46,12 +46,6 @@ in
           owner = "root";
           group = "root";
         };
-        # Bootstrap secrets pour Infisical (chart standalone).
-        # Le chart attend un Secret `infisical-secrets` dans le namespace de
-        # déploiement avec ENCRYPTION_KEY (chiffrement DB) et AUTH_SECRET (JWT).
-        # Générés une fois avec `openssl rand -hex 16` puis figés dans sops.
-        infisical_encryption_key = { mode = "0400"; owner = "root"; };
-        infisical_auth_secret    = { mode = "0400"; owner = "root"; };
       };
 
       # Génération déclarative du Secret k8s consommé par Alertmanager.
@@ -72,26 +66,6 @@ in
             stringData:
               # Discord accepte les payloads Slack-format sur l'endpoint /slack.
               webhook-url: "${config.sops.placeholder.discord_webhook_url}/slack"
-          '';
-        };
-        # Secret de bootstrap consommé par le chart infisical-standalone.
-        # Contient les 2 clés requises (chiffrement DB + JWT) + SITE_URL.
-        # Le chart pointe `kubeSecretRef: infisical-secrets` dans le namespace
-        # de la release.
-        "infisical-secrets.yaml" = {
-          path = "/var/lib/rancher/k3s/server/manifests/30-infisical-secrets.yaml";
-          mode = "0400";
-          content = ''
-            apiVersion: v1
-            kind: Secret
-            metadata:
-              name: infisical-secrets
-              namespace: security
-            type: Opaque
-            stringData:
-              ENCRYPTION_KEY: "${config.sops.placeholder.infisical_encryption_key}"
-              AUTH_SECRET: "${config.sops.placeholder.infisical_auth_secret}"
-              SITE_URL: "https://k3s-cp-1.salamander-scala.ts.net:9443"
           '';
         };
       };
