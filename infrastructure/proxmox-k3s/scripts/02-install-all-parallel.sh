@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../nixos"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SECRETS_DIR="${SECRETS_DIR:-$SCRIPT_DIR/../secrets}"
+IDENTITY_FILE="${IDENTITY_FILE:-$SECRETS_DIR/ssh-deploy-key}"
+TS_AUTH_KEY_FILE="${TS_AUTH_KEY_FILE:-$SECRETS_DIR/tailscale-authkey}"
 
-IDENTITY_FILE="${IDENTITY_FILE:-/tmp/projet-etude-k3s-ed25519}"
+cd "$SCRIPT_DIR/../nixos"
 LOG_DIR="${LOG_DIR:-/tmp/nixos-anywhere-logs}"
-TS_AUTH_KEY_FILE="${TS_AUTH_KEY_FILE:-/tmp/projet-etude-tailscale-authkey}"
 
 if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
   # shellcheck disable=SC1091

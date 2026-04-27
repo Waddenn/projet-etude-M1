@@ -1,0 +1,14 @@
+keys:
+  - &dev_tom       age19narukfyx0ln5e92dn3m7yuz3yrrsaga295xu7r04r2rdykjqyks6x29ke
+  - &k3s_cp_1      age155gyd3w6z33ethyjsfjnv4dtvu8kzqrfe5j22jgz4j09t044990sphg8kg
+  - &k3s_worker_1  age1uduvec8lz3hcdcyvaljs0xlgk57nxc7qqu7ydk3z2sd7gy00fyeqq0q732
+  - &k3s_worker_2  age1zqpwwpu4ej0ns8ye2kdp3m098p4s47anvp8pqu6mmazd6d7c095s5mtfty
+
+creation_rules:
+  - path_regex: secrets/secrets\.yaml$
+    key_groups:
+      - age:
+          - *dev_tom
+          - *k3s_cp_1
+          - *k3s_worker_1
+          - *k3s_worker_2

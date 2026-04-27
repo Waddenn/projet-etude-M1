@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd "$(dirname "$0")/../nixos"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SECRETS_DIR="${SECRETS_DIR:-$SCRIPT_DIR/../secrets}"
+IDENTITY_FILE="${IDENTITY_FILE:-$SECRETS_DIR/ssh-deploy-key}"
 
-IDENTITY_FILE="${IDENTITY_FILE:-/tmp/projet-etude-k3s-ed25519}"
+cd "$SCRIPT_DIR/../nixos"
 
 if [ -f "$HOME/.nix-profile/etc/profile.d/nix.sh" ]; then
   # Needed when the script runs from a fresh Distrobox shell.
@@ -21,7 +23,7 @@ if [ ! -f "$IDENTITY_FILE" ]; then
   exit 1
 fi
 
-TS_AUTH_KEY_FILE="${TS_AUTH_KEY_FILE:-/tmp/projet-etude-tailscale-authkey}"
+TS_AUTH_KEY_FILE="${TS_AUTH_KEY_FILE:-$SECRETS_DIR/tailscale-authkey}"
 
 export NIX_SSHOPTS="-F /dev/null -i $IDENTITY_FILE -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 export NIX_CONFIG="${NIX_CONFIG:-experimental-features = nix-command flakes}"

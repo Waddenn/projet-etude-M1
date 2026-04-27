@@ -65,5 +65,7 @@
       experimental-features = [ "nix-command" "flakes" ];
       trusted-users = [ "root" "@wheel" ];
     };
+
+    projet.secrets.enable = true;
   };
 }

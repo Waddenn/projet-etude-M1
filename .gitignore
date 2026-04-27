@@ -29,7 +29,8 @@ id_ed25519.*
 *authkey*
 *auth-key*
 *auth_key*
-secrets/
+# Le dossier dev-side secrets/ a son propre .gitignore interne.
+# On garde nixos/secrets/ tracké pour les fichiers sops-encrypted.
 .secrets/
 .env
 .env.*
@@ -65,3 +66,5 @@ __pycache__/
 node_modules/
 
 *.pub
+# Le flake référence ce fichier au build : public, donc safe à tracker.
+!infrastructure/proxmox-k3s/nixos/ssh-authorized-keys.pub
