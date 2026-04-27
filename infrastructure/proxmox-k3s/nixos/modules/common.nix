@@ -26,8 +26,12 @@
       }];
       firewall = {
         enable = true;
-        allowedTCPPorts = [ 22 80 443 6443 10250 ];
+        # 22 ssh, 80/443 ingress, 6443 k8s API, 10250 kubelet,
+        # 9100 node-exporter (scrapé par Prometheus depuis un autre nœud).
+        allowedTCPPorts = [ 22 80 443 6443 10250 9100 ];
         allowedUDPPorts = [ 8472 ];
+        # Tout le trafic intra-cluster (CNI flannel) doit passer librement.
+        trustedInterfaces = [ "cni0" "flannel.1" ];
       };
     };
 
