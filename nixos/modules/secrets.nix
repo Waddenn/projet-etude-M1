@@ -36,6 +36,38 @@ in
           owner = "root";
           group = "root";
         };
+        # Webhook Discord pour Alertmanager + ArgoCD notifications.
+        # Décrypté seulement sur le control-plane (k3s server) — les agents
+        # n'en ont pas besoin, mais sops-nix tente le décryptage sur tous les
+        # hôtes ; on garde le secret listé partout, le template est wrap-mkIf
+        # pour limiter l'écriture du Secret k8s à cp-1.
+        discord_webhook_url = {
+          mode = "0400";
+          owner = "root";
+          group = "root";
+        };
+      };
+
+      # Génération déclarative du Secret k8s consommé par Alertmanager.
+      # sops-nix interpole les placeholders au moment du décryptage et
+      # écrit le manifest dans le dossier auto-déployé par k3s. Limité au
+      # control-plane via lib.mkIf sur projet.argocd.enable.
+      templates = lib.mkIf config.projet.argocd.enable {
+        "alertmanager-discord.yaml" = {
+          path = "/var/lib/rancher/k3s/server/manifests/30-alertmanager-discord.yaml";
+          mode = "0400";
+          content = ''
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: alertmanager-discord-webhook
+              namespace: monitoring
+            type: Opaque
+            stringData:
+              # Discord accepte les payloads Slack-format sur l'endpoint /slack.
+              webhook-url: "${config.sops.placeholder.discord_webhook_url}/slack"
+          '';
+        };
       };
     };
   };
