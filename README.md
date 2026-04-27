@@ -33,8 +33,11 @@ ArgoCD (GitOps), sops-nix (secrets) et Tailscale (accès distant).
 │   ├── hosts/           # config par nœud (k3s-cp-1, k3s-worker-{1,2})
 │   └── secrets/         # secrets sops-encrypted (k3s_token, …)
 ├── kubernetes/          # manifests synchronisés par ArgoCD
-│   └── applications/
-│       └── monitoring/  # Applications kube-prometheus-stack + Loki + Alloy
+│   ├── applications/    # plateforme (Apps Argo CD posées par la root app)
+│   │   ├── monitoring/  # kube-prometheus-stack + Loki + Alloy
+│   │   └── platform/    # ApplicationSet "apps" + Argo CD Image Updater
+│   └── apps/            # apps métier (1 dossier = 1 Application Argo CD via l'AppSet)
+│       └── projet-etude-app-demo/  # manifests pointant ghcr.io/waddenn/projet-etude-app-demo
 └── secrets/             # secrets dev-side (gitignored, sauf README)
 ```
 

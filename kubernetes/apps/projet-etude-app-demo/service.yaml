@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: projet-etude-app-demo
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: projet-etude-app-demo
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

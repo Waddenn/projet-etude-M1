@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - git:
+        repoURL: https://github.com/Waddenn/projet-etude-M1.git
+        revision: main
+        directories:
+          - path: kubernetes/apps/*
+          - path: kubernetes/apps/_*
+            exclude: true
+  template:
+    metadata:
+      name: "{{.path.basename}}"
+      namespace: argocd
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+      annotations:
+        argocd-image-updater.argoproj.io/image-list: main=ghcr.io/waddenn/{{.path.basename}}
+        argocd-image-updater.argoproj.io/main.update-strategy: digest
+        argocd-image-updater.argoproj.io/main.allow-tags: regexp:^main$
+        argocd-image-updater.argoproj.io/write-back-method: argocd
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/Waddenn/projet-etude-M1.git
+        targetRevision: main
+        path: "{{.path.path}}"
+        directory:
+          recurse: true
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{.path.basename}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
