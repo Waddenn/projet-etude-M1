@@ -150,11 +150,11 @@ argocd-apps:
 # Port-forward de Grafana sur http://localhost:3000  (user: admin / pwd: admin)
 grafana:
     @echo "Grafana: http://localhost:3000  (admin / admin)"
-    KUBECONFIG={{kubecfg}} kubectl -n monitoring port-forward svc/kps-grafana 3000:80
+    KUBECONFIG={{kubecfg}} kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80
 
 # Port-forward de Prometheus sur http://localhost:9090
 prometheus:
-    KUBECONFIG={{kubecfg}} kubectl -n monitoring port-forward svc/kps-kube-prometheus-stack-prometheus 9090:9090
+    KUBECONFIG={{kubecfg}} kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090:9090
 
 # État des pods monitoring
 mon-status:

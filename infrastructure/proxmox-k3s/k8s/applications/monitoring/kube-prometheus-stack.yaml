@@ -12,7 +12,7 @@ spec:
     chart: kube-prometheus-stack
     targetRevision: 65.5.1
     helm:
-      releaseName: kps
+      releaseName: kube-prometheus-stack
       values: |
         crds:
           enabled: true
