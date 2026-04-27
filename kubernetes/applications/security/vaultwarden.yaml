@@ -27,6 +27,8 @@ spec:
         # On l'ajoutera via ESO + sops après le bootstrap initial.
         adminToken:
           value: ""
+          existingSecret: ""
+          existingSecretKey: ""
 
         # Stockage par node (sqlite est suffisant pour un projet d'étude).
         database:
