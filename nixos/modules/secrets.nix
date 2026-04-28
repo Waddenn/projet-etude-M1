@@ -52,7 +52,7 @@ in
       # sops-nix interpole les placeholders au moment du décryptage et
       # écrit le manifest dans le dossier auto-déployé par k3s. Limité au
       # control-plane via lib.mkIf sur projet.argocd.enable.
-      templates = lib.mkIf config.projet.argocd.enable {
+      templates = lib.mkIf (config.projet.argocd.enable or false) {
         "alertmanager-discord.yaml" = {
           path = "/var/lib/rancher/k3s/server/manifests/30-alertmanager-discord.yaml";
           mode = "0400";

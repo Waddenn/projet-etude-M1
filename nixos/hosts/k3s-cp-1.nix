@@ -22,7 +22,7 @@
     routes = {
       "443"  = "https+insecure://localhost:30443";  # ArgoCD
       "8443" = "http://localhost:30030";             # Grafana
-      "9443" = "http://localhost:80";                # Traefik (Ingress apps)
+      "9443" = "http://localhost:30880";             # Traefik web (NodePort traefik-web-ext)
     };
   };
 }

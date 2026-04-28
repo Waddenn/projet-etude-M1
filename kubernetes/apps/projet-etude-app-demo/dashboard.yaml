@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: projet-etude-app-demo-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  app-demo.json: |
+    {
+      "title": "App demo — projet-etude",
+      "uid": "projet-etude-app-demo",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": { "from": "now-15m", "to": "now" },
+      "tags": ["projet-etude"],
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "Requests / s (par status)",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum by (status) (rate(http_requests_total{namespace=\"projet-etude-app-demo\"}[1m]))",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "Latence p95 (s)",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, path) (rate(http_request_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[1m])))",
+              "legendFormat": "{{path}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Replicas (HPA)",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas{namespace=\"projet-etude-app-demo\",deployment=\"projet-etude-app-demo\"}",
+              "legendFormat": "ready",
+              "refId": "A"
+            },
+            {
+              "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=\"projet-etude-app-demo\"}",
+              "legendFormat": "desired",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "CPU pods (cores)",
+          "type": "timeseries",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 6, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"projet-etude-app-demo\",container=\"app\"}[1m]))",
+              "legendFormat": "{{pod}}",
+              "refId": "A"
+            }
+          ]
+        }
+      ]
+    }
