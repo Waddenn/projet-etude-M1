@@ -21,9 +21,8 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
       annotations:
-        argocd-image-updater.argoproj.io/image-list: main=ghcr.io/waddenn/{{.path.basename}}
+        argocd-image-updater.argoproj.io/image-list: main=ghcr.io/waddenn/{{.path.basename}}:main
         argocd-image-updater.argoproj.io/main.update-strategy: digest
-        argocd-image-updater.argoproj.io/main.allow-tags: regexp:^main$
         argocd-image-updater.argoproj.io/write-back-method: argocd
     spec:
       project: default
