@@ -8,7 +8,7 @@ spec:
   goTemplateOptions: ["missingkey=error"]
   generators:
     - git:
-        repoURL: https://github.com/Waddenn/projet-etude-M1.git
+        repoURL: git@github.com:Waddenn/projet-etude-M1.git
         revision: main
         directories:
           - path: kubernetes/apps/*
@@ -23,11 +23,13 @@ spec:
       annotations:
         argocd-image-updater.argoproj.io/image-list: main=ghcr.io/waddenn/{{.path.basename}}:main
         argocd-image-updater.argoproj.io/main.update-strategy: digest
-        argocd-image-updater.argoproj.io/write-back-method: argocd
+        argocd-image-updater.argoproj.io/write-back-method: git
+        argocd-image-updater.argoproj.io/git-branch: main
+        argocd-image-updater.argoproj.io/write-back-target: kustomization
     spec:
       project: default
       source:
-        repoURL: https://github.com/Waddenn/projet-etude-M1.git
+        repoURL: git@github.com:Waddenn/projet-etude-M1.git
         targetRevision: main
         path: "{{.path.path}}"
       destination:
