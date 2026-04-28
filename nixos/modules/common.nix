@@ -71,5 +71,12 @@
     };
 
     projet.secrets.enable = true;
+
+    # Kepler (DaemonSet eBPF Green IT) monte /usr/src en hostPath. NixOS n'a
+    # pas ce répertoire par défaut (FHS non-standard). On le crée vide :
+    # Kepler 0.7+ embarque des BPF pré-compilés, n'a pas besoin des sources.
+    systemd.tmpfiles.rules = [
+      "d /usr/src 0755 root root - -"
+    ];
   };
 }
