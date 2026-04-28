@@ -1,0 +1,12 @@
+extends: default
+
+rules:
+  line-length: disable
+  comments-indentation: disable
+  truthy:
+    allowed-values: ["true", "false", "on"]
+    check-keys: true
+  document-start: disable
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
