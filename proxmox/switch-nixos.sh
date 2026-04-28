@@ -33,6 +33,7 @@ push_tailscale_key() {
   if [ ! -s "$TS_AUTH_KEY_FILE" ]; then
     return 0
   fi
+  # shellcheck disable=SC2086 # NIX_SSHOPTS doit être word-splitted (multi-flags ssh)
   ssh $NIX_SSHOPTS "ops@$target_ip" \
     'sudo install -d -m 0700 /var/lib/tailscale && sudo install -m 0600 /dev/stdin /var/lib/tailscale/auth.key' \
     < "$TS_AUTH_KEY_FILE"

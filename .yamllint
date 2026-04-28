@@ -3,6 +3,10 @@ extends: default
 rules:
   line-length: disable
   comments-indentation: disable
+  # Le projet utilise volontairement un flow style aligné pour les
+  # blocs `resources:` (lisibilité des limites/requests sur une ligne).
+  braces: disable
+  colons: disable
   truthy:
     allowed-values: ["true", "false", "on"]
     check-keys: true
