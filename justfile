@@ -175,9 +175,16 @@ hpa-watch:
 
 # État ponctuel HPA + replicas + utilisation CPU/RAM
 app-status:
-    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo get hpa,deploy,pods
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo get hpa,deploy,pods,ingress
     @echo
     KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo top pods 2>/dev/null || echo "(metrics-server pas prêt)"
+
+# Affiche l'URL Tailnet de l'app démo et fait un curl
+app-demo-url:
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    url="https://$host:9443/app-demo"; \
+    echo "URL: $url"; \
+    curl -ksS "$url"
 
 # ---------- Secrets (sops-nix) ----------
 

@@ -15,11 +15,14 @@
   # Les ports NodePort correspondants sont définis :
   #  - 30443 : argocd-server-ext     (modules/k8s-bootstrap.nix)
   #  - 30030 : kube-prometheus-stack-grafana (kubernetes/applications/monitoring/kube-prometheus-stack.yaml)
+  # Le port 9443 cible Traefik (LB k3s, écoute via svclb sur :80 du host) :
+  # entrée commune pour toutes les apps métier, routage par Ingress (chemin).
   projet.tailscaleServe = {
     enable = true;
     routes = {
       "443"  = "https+insecure://localhost:30443";  # ArgoCD
       "8443" = "http://localhost:30030";             # Grafana
+      "9443" = "http://localhost:80";                # Traefik (Ingress apps)
     };
   };
 }
