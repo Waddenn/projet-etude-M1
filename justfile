@@ -160,6 +160,25 @@ prometheus:
 mon-status:
     KUBECONFIG={{kubecfg}} kubectl -n monitoring get pods,svc,pvc
 
+# ---------- App demo / autoscaling ----------
+
+# Lance un load test (hey, 90s, 60 conn) contre l'app démo, puis tail les logs
+loadtest:
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo delete job loadtest-app-demo --ignore-not-found
+    KUBECONFIG={{kubecfg}} kubectl apply -f kubernetes/loadtest/job.yaml
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo wait --for=condition=Ready pod -l job-name=loadtest-app-demo --timeout=60s
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo logs -f -l job-name=loadtest-app-demo
+
+# Suit en temps réel HPA + pods de l'app démo (à lancer en parallèle d'un loadtest)
+hpa-watch:
+    KUBECONFIG={{kubecfg}} watch -n 2 'kubectl -n projet-etude-app-demo get hpa,pods'
+
+# État ponctuel HPA + replicas + utilisation CPU/RAM
+app-status:
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo get hpa,deploy,pods
+    @echo
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo top pods 2>/dev/null || echo "(metrics-server pas prêt)"
+
 # ---------- Secrets (sops-nix) ----------
 
 # Génère une age key dev locale (~/.config/sops/age/keys.txt) si absente

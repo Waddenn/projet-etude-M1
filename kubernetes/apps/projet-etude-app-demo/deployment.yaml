@@ -5,7 +5,7 @@ metadata:
   labels:
     app.kubernetes.io/name: projet-etude-app-demo
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: projet-etude-app-demo
@@ -21,8 +21,8 @@ spec:
             - containerPort: 8080
               name: http
           resources:
-            requests: { cpu: 10m, memory: 16Mi }
-            limits:   { memory: 64Mi }
+            requests: { cpu: 50m, memory: 16Mi }
+            limits:   { cpu: 200m, memory: 64Mi }
           readinessProbe:
             httpGet: { path: /healthz, port: http }
           livenessProbe:
