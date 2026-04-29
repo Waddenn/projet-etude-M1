@@ -2,7 +2,7 @@
 set -euo pipefail
 
 TEMPLATE_ID="${TEMPLATE_ID:-9000}"
-STORAGE="${STORAGE:-Storage}"
+STORAGE="${STORAGE:-storage2}"
 SSH_KEY_FILE="${SSH_KEY_FILE:-/root/k3s-admin.pub}"
 GATEWAY="${GATEWAY:-192.168.1.254}"
 DNS="${DNS:-1.1.1.1}"
