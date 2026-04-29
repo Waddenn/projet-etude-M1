@@ -15,8 +15,11 @@ in
       "--disable=servicelb"
       # Pas de provider cloud → cloud-controller-manager n'a aucun rôle utile,
       # mais sa fenêtre de démarrage très étroite vs bootstrap RBAC le faisait
-      # crasher en boucle (k3s 1.34) → désactivation.
+      # crasher en boucle (k3s 1.34) → désactivation. Sans ce flag passé au
+      # kubelet, le taint node.cloudprovider.kubernetes.io/uninitialized
+      # reste sur tous les nœuds et empêche toute planification.
       "--disable-cloud-controller"
+      "--kubelet-arg=cloud-provider="
     ];
   };
 
