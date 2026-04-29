@@ -13,6 +13,10 @@ in
       "--advertise-address=${config.projet.k3s.nodeIp}"
       "--write-kubeconfig-mode=0644"
       "--disable=servicelb"
+      # Pas de provider cloud → cloud-controller-manager n'a aucun rôle utile,
+      # mais sa fenêtre de démarrage très étroite vs bootstrap RBAC le faisait
+      # crasher en boucle (k3s 1.34) → désactivation.
+      "--disable-cloud-controller"
     ];
   };
 
