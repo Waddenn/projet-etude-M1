@@ -16,6 +16,11 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        # UID 65532 = "nonroot" dans gcr.io/distroless/static. Explicite pour
+        # satisfaire runAsNonRoot (kubelet ne peut pas résoudre un user nommé).
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: app
