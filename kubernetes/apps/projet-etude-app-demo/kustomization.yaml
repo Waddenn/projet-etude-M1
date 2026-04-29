@@ -12,4 +12,4 @@ resources:
 - dashboard.yaml
 images:
 - name: ghcr.io/waddenn/projet-etude-app-demo
-  digest: sha256:bbfeff71728035f0be18e03df111a885273f1cb51408eb13bc4e0df8d67a1692
+  digest: sha256:3fc68107045b110ad19e90951868936fef1953365d2e262cde6d5372190b4fdc
