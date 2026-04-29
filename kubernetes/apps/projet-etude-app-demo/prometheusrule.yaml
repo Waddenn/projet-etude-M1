@@ -1,0 +1,35 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: projet-etude-app-demo
+  labels:
+    app.kubernetes.io/name: projet-etude-app-demo
+spec:
+  groups:
+    - name: projet-etude-app-demo.rules
+      rules:
+        - alert: AppDemoHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{namespace="projet-etude-app-demo",status=~"5.."}[5m]))
+              /
+            sum(rate(http_requests_total{namespace="projet-etude-app-demo"}[5m]))
+              > 0.05
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "App demo: >5% d'erreurs 5xx sur 5 min"
+        - alert: AppDemoLatencyP95High
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(http_request_duration_seconds_bucket{namespace="projet-etude-app-demo"}[5m]))
+            ) > 1
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "App demo: latence p95 > 1s"
+        - alert: AppDemoTooManyOpenTickets
+          expr: max(tickets_open{namespace="projet-etude-app-demo"}) > 50
+          for: 15m
+          labels: { severity: info }
+          annotations:
+            summary: "App demo: plus de 50 incidents ouverts"

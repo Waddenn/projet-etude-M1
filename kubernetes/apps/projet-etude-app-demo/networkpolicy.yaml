@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: projet-etude-app-demo
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: projet-etude-app-demo
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # ingress controller (Traefik in kube-system) + Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
+          protocol: TCP
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Postgres (CNPG) — same namespace
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: ticketdb
+      ports:
+        - port: 5432
+          protocol: TCP
