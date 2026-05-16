@@ -39,9 +39,10 @@ spec:
           staticClients:
             - id: projet-etude-app-demo
               name: projet-etude-app-demo
-              # secret réel servi via ExternalSecret + montage env dans l'app.
-              # Ici on met un placeholder repris ensuite par Vault.
-              secretEnv: DEX_APP_DEMO_CLIENT_SECRET
+              # Secret littéral : OIDC est désactivé côté app au premier déploiement
+              # (cf. deployment-api.yaml). Quand on bascule l'app sur OIDC, on
+              # remplace ce literal par un secretEnv sourcé via ExternalSecret.
+              secret: "demo-app-client-secret-PLACEHOLDER-rotate-me"
               redirectURIs:
                 - https://projet-etude.tail-scale.ts.net:9443/app-demo/auth/callback
           # mapping minimal : tous les utilisateurs statiques héritent de groupes
@@ -50,12 +51,6 @@ spec:
           # configuration `staticPasswords[].groups` (non standard).
           # Pour rester portable, on s'appuie sur "email" et un mapping côté
           # app : on rajoute donc un groups injection via la conf user.
-        envVars:
-          - name: DEX_APP_DEMO_CLIENT_SECRET
-            valueFrom:
-              secretKeyRef:
-                name: dex-secrets
-                key: app-demo-client-secret
         replicaCount: 1
         service:
           type: ClusterIP
