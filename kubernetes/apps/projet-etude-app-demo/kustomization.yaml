@@ -1,6 +1,5 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 # Labels communs propagés à toutes les ressources, sans toucher aux selectors
 # (immutables sur Deployment / StatefulSet — un commonLabels classique casserait).
 labels:
@@ -9,7 +8,6 @@ labels:
   pairs:
     app.kubernetes.io/part-of: projet-etude
     app.kubernetes.io/managed-by: argocd
-
 resources:
 - database.yaml
 - deployment-api.yaml
@@ -32,8 +30,8 @@ resources:
 - dashboard-worker.yaml
 images:
 - name: ghcr.io/waddenn/projet-etude-app-demo-api
-  digest: sha256:40d5956d289d0791940fea9016f6a6cafd332eca960dbd8e7b10336ae37c3d70
+  digest: sha256:9b594e894d7297b2be14d2d40d7d4cf0af0a916760fadf7c6461769aa5a05ce5
 - name: ghcr.io/waddenn/projet-etude-app-demo-worker
-  digest: sha256:9be130f2ec731a64fd3f0fa43fccc364594159409868dca056ed1b81b4981b84
+  digest: sha256:73cebeeb02756d09227dcea97ab490abf817fc252627502c473eff91c2bfa275
 - name: ghcr.io/waddenn/projet-etude-app-demo-audit-purge
   newTag: main
