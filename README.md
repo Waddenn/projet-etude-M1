@@ -8,15 +8,25 @@ ArgoCD (GitOps), sops-nix (secrets) et Tailscale (accès distant).
 
 | Couche                | Outil                       |
 | --------------------- | --------------------------- |
-| Hyperviseur           | Proxmox VE                  |
+| Hyperviseur           | Proxmox VE (3 VMs : 2 vCPU / 6 GiB / 32 GB) |
 | OS des nœuds          | NixOS 25.11 (flake)         |
 | Provisionnement       | nixos-anywhere (kexec)      |
 | Cluster Kubernetes    | k3s (1 control-plane, 2 workers) |
-| GitOps                | ArgoCD (app of apps)        |
-| Secrets               | sops-nix (age via SSH host key) |
-| Réseau VPN            | Tailscale + tailscale serve |
-| Monitoring            | kube-prometheus-stack + Loki + Alloy |
-| Runner de tâches      | just (devShell Nix)         |
+| GitOps                | ArgoCD + Image Updater (write-back Git, digests épinglés) |
+| Secrets cluster       | sops-nix (age dérivé des SSH host keys persistantes) |
+| Secrets runtime       | Vault (DEV) + External-Secrets Operator |
+| Auth                  | Dex (OIDC IdP) — viewer / operator |
+| Réseau VPN            | Tailscale + tailscale serve (HTTPS tailnet) |
+| Ingress               | Traefik (intégré k3s) + middleware StripPrefix |
+| Métriques             | kube-prometheus-stack 65.5.1 (Prometheus + Alertmanager + Grafana) |
+| Logs                  | Loki 6.16 + Alloy 0.10 (DaemonSet) |
+| Traces                | Tempo 1.24 (OTLP gRPC, exemplars trace\_id) |
+| Sécurité images       | Trivy en CI (CRITICAL/HIGH bloquant) + trivy-operator dans le cluster |
+| Green IT              | Kepler (estimation conso énergétique) |
+| Base de données       | CloudNative-PG (PostgreSQL 16.4) |
+| App de démo           | Go 1.25 — tracker d'incidents (api + worker + audit-purge) |
+| CI/CD                 | GitHub Actions (validate.yml infra, build.yml app → GHCR) |
+| Runner de tâches      | just (devShell Nix) |
 
 ## Arborescence
 
@@ -70,6 +80,32 @@ Une fois le cluster up, les UIs sont exposées sur le tailnet par tailscale serv
 | ---------- | ------------------------------------------------- | -------------- |
 | ArgoCD     | https://k3s-cp-1.<tailnet>.ts.net                | admin / *(cf. `just argocd-password`)* |
 | Grafana    | https://k3s-cp-1.<tailnet>.ts.net:8443           | admin / admin  |
+| Traefik / app-demo | https://k3s-cp-1.<tailnet>.ts.net:9443/app-demo | OIDC Dex |
+
+## Observabilité & SLO
+
+- **Dashboards Grafana** auto-importés : *Platform overview*, *App demo (métier)*,
+  *SLO & burn-rate*, *Worker & queue*.
+- **SLO disponibilité** : 99.5 % (burn-rate multi-fenêtres 5m/1h fast + 30m/6h slow,
+  cf. `kubernetes/apps/projet-etude-app-demo/prometheusrule.yaml`).
+- **Alerting** : Alertmanager → webhook Discord (secret sops + template
+  `nixos/modules/secrets.nix`).
+- **Traces distribuées** : OTLP gRPC → Tempo, propagation via colonne JSONB
+  `jobs.trace_context` jusqu'au worker (span CONSUMER lié).
+- **Logs ↔ traces** : derived field `trace_id` Loki → Tempo + retour vers Loki/Prometheus.
+
+## Chaos engineering
+
+Recettes prêtes pour démos de résilience (cf. `just chaos-*`) :
+
+```bash
+just chaos-kill          # tue 1 pod api random
+just chaos-schedule      # active le CronJob killer (toutes les 30 min)
+just chaos-partition     # isole 1 pod via NetworkPolicy deny-all 60 s
+just chaos-probe         # 5 min de /healthz à 20 rps pendant chaos
+just demo-flaky          # injecte 50 % d'erreurs (déclenche burn-rate fast)
+just demo-slow           # injecte 800 ms de latence (déclenche p95 alert)
+```
 
 ## Workflow GitOps
 
@@ -94,9 +130,33 @@ just sops-edit        # éditer le fichier de secrets encrypté
 
 ## Sécurité — secrets
 
-- **Secrets dev-side** dans `secrets/` : clé SSH de déploiement, pre-auth Tailscale.
+- **Secrets dev-side** dans `secrets/` : clé SSH de déploiement, pre-auth Tailscale,
+  clé SSH ArgoCD Image Updater, SSH host keys persistantes des 3 nœuds.
   Gitignored, à rotater hors-bande.
-- **Secrets cluster** dans `nixos/secrets/secrets.yaml` : k3s token, futurs mots
-  de passe applicatifs. Encryptés avec sops + age. Décryptés au boot par chaque
-  nœud via sa SSH host key (dérivée en age via `ssh-to-age`). Ajouter un nœud =
-  `just sops-host-keys` puis `just sops-rotate`.
+- **Secrets cluster** dans `nixos/secrets/secrets.yaml` : k3s token, webhook Discord,
+  clé SSH image-updater. Encryptés avec sops + age (4 recipients : dev + 3 hosts).
+  Décryptés au boot par chaque nœud via sa SSH host key (dérivée en age via
+  `ssh-to-age`). Ajouter un nœud = `just sops-host-keys` puis `just sops-rotate`.
+- **Secrets runtime** : Vault (mode DEV) + External-Secrets Operator. Les secrets
+  applicatifs (`oidc-client`, `app-session`, `app-webhook`) sont projetés depuis Vault
+  via `ClusterSecretStore vault-backend`.
+- **App** : OIDC via Dex (rôles `viewer` / `operator`), session cookie signée
+  HMAC-SHA256, audit log (purge RGPD 90 j via CronJob hebdomadaire).
+
+## CI/CD
+
+- **`projet-etude` (infra)** — `.github/workflows/validate.yml` : yamllint,
+  actionlint, shellcheck, kubeconform, `nix flake check`, kube-score.
+- **`projet-etude-app-demo` (app)** — `.github/workflows/build.yml` :
+  golangci-lint v2.6, `go test -race -cover`, build matriciel
+  (api / worker / audit-purge), scan Trivy bloquant (CRITICAL/HIGH),
+  push GHCR avec tags `main` + `sha-<long>`.
+- **Livraison continue** : ArgoCD Image Updater détecte les nouveaux digests
+  sur GHCR et commit la mise à jour dans `kubernetes/apps/.../kustomization.yaml`
+  → resync automatique.
+
+## Audit technique
+
+Un audit factuel complet du projet (architecture, IaC, conteneurisation,
+orchestration, sécurité, observabilité, KPIs réels, dette technique) est
+disponible dans [`AUDIT.md`](./AUDIT.md).
