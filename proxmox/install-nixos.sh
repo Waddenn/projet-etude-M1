@@ -26,16 +26,41 @@ fi
 
 mkdir -p "$LOG_DIR"
 
-# Prepare an extra-files directory with the Tailscale auth key, if available.
-EXTRA_FILES_DIR="$(mktemp -d)"
-trap 'rm -rf "$EXTRA_FILES_DIR"' EXIT
+# 0. Bootstrap des SSH host keys persistantes + alignement sops.
+#    Idempotent : sans effet si déjà à jour.
+"$SCRIPT_DIR/bootstrap-host-keys.sh"
+
+HOST_KEYS_DIR="${HOST_KEYS_DIR:-$SECRETS_DIR/host-keys}"
+
+# Prepare a per-host extra-files directory.
+# - Tailscale auth key (commun aux 3 hôtes, si présente)
+# - SSH host key persistante (spécifique par hôte) → permet à sops-nix
+#   de déchiffrer les secrets dès la première activation, même sur VM neuve.
+EXTRA_FILES_ROOT="$(mktemp -d)"
+trap 'rm -rf "$EXTRA_FILES_ROOT"' EXIT
+
+build_extra_files() {
+  local host="$1"
+  local dir="$EXTRA_FILES_ROOT/$host"
+  install -d -m 0755 "$dir"
+  if [ -s "$TS_AUTH_KEY_FILE" ]; then
+    install -d -m 0700 "$dir/var/lib/tailscale"
+    install -m 0600 "$TS_AUTH_KEY_FILE" "$dir/var/lib/tailscale/auth.key"
+  fi
+  local hk="$HOST_KEYS_DIR/$host/ssh_host_ed25519_key"
+  if [ ! -s "$hk" ]; then
+    echo "missing host key: $hk (run proxmox/bootstrap-host-keys.sh)" >&2
+    exit 1
+  fi
+  install -d -m 0755 "$dir/etc/ssh"
+  install -m 0600 "$hk"     "$dir/etc/ssh/ssh_host_ed25519_key"
+  install -m 0644 "$hk.pub" "$dir/etc/ssh/ssh_host_ed25519_key.pub"
+  echo "$dir"
+}
+
 if [ -s "$TS_AUTH_KEY_FILE" ]; then
-  install -d -m 0700 "$EXTRA_FILES_DIR/var/lib/tailscale"
-  install -m 0600 "$TS_AUTH_KEY_FILE" "$EXTRA_FILES_DIR/var/lib/tailscale/auth.key"
-  EXTRA_ARGS=(--extra-files "$EXTRA_FILES_DIR")
   echo "[$(date +%T)] tailscale auth key found, will be deployed to /var/lib/tailscale/auth.key"
 else
-  EXTRA_ARGS=()
   echo "[$(date +%T)] no tailscale auth key at $TS_AUTH_KEY_FILE — nodes will need 'tailscale up' manually"
 fi
 
@@ -54,13 +79,15 @@ deploy_node() {
   local host="$1"
   local ip="$2"
   local log="$LOG_DIR/$host.log"
+  local extra_dir
+  extra_dir="$(build_extra_files "$host")"
   echo "[$(date +%T)] start $host ($ip) -> $log"
   if nix run github:nix-community/nixos-anywhere --extra-experimental-features "nix-command flakes" -- \
       --ssh-option "IdentityFile=$IDENTITY_FILE" \
       --ssh-option "IdentitiesOnly=yes" \
       --ssh-option "StrictHostKeyChecking=no" \
       --ssh-option "UserKnownHostsFile=/dev/null" \
-      "${EXTRA_ARGS[@]}" \
+      --extra-files "$extra_dir" \
       --flake ".#$host" \
       "root@$ip" >"$log" 2>&1; then
     echo "[$(date +%T)] OK   $host"
