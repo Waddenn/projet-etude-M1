@@ -1,8 +1,53 @@
 # projet-etude — Cluster k3s GitOps sur Proxmox
 
+[![validate](https://github.com/Waddenn/projet-etude-M1/actions/workflows/validate.yml/badge.svg)](https://github.com/Waddenn/projet-etude-M1/actions/workflows/validate.yml)
+
 Projet d'études M1 DevOps : déploiement reproductible et déclaratif d'un cluster
 Kubernetes 3 nœuds (k3s) sur des VMs Proxmox, géré end-to-end avec NixOS,
 ArgoCD (GitOps), sops-nix (secrets) et Tailscale (accès distant).
+
+**Dépôts liés**
+
+| Dépôt | Rôle |
+| ----- | ---- |
+| [projet-etude-M1](https://github.com/Waddenn/projet-etude-M1) (ce repo) | Infra NixOS, manifests Kubernetes, GitOps |
+| [projet-etude-app-demo](https://github.com/Waddenn/projet-etude-app-demo) | Application Go (api, worker, audit-purge) → GHCR |
+
+## Objectifs pédagogiques
+
+- Provisionner un cluster **reproductible** (NixOS flake + Proxmox + nixos-anywhere).
+- Opérer en **GitOps** (ArgoCD bootstrap déclaratif, ApplicationSet, Image Updater).
+- Gérer les **secrets** à plusieurs niveaux (dev-side, sops-nix, Vault + ESO).
+- Mettre en place l'**observabilité SRE** (métriques, logs, traces, SLO, alerting).
+- Démontrer la **résilience** (HPA, PDB, chaos engineering, burn-rate alerts).
+
+## Architecture
+
+```mermaid
+flowchart TB
+  subgraph dev [Poste développeur]
+    Just[just + nix develop]
+    Git[Git push]
+  end
+  subgraph pve [Proxmox]
+    VM1[k3s-cp-1]
+    VM2[k3s-worker-1]
+    VM3[k3s-worker-2]
+  end
+  subgraph cluster [Cluster k3s]
+    Argo[ArgoCD]
+    Apps[Apps métier + plateforme]
+    Obs[Prometheus / Loki / Tempo]
+  end
+  GHCR[GHCR images]
+  Just --> pve
+  Git --> Argo
+  Argo --> Apps
+  Apps --> Obs
+  GHCR --> Argo
+```
+
+Détail : [`docs/architecture.md`](./docs/architecture.md).
 
 ## Stack
 
@@ -28,46 +73,100 @@ ArgoCD (GitOps), sops-nix (secrets) et Tailscale (accès distant).
 | CI/CD                 | GitHub Actions (validate.yml infra, build.yml app → GHCR) |
 | Runner de tâches      | just (devShell Nix) |
 
+## Prérequis
+
+| Élément | Détail |
+| ------- | ------ |
+| OS poste dev | Linux ou **WSL2** (le `justfile` utilise bash) |
+| Nix | Flakes activés — `nix develop ./nixos` |
+| distrobox | Conteneur `nix-deploy` pour `just deploy` / `switch` |
+| Proxmox | Host SSH accessible (`just pve` → `root@proxade` par défaut) |
+| Template VM | `proxmox/create-template.sh` exécuté une fois sur PVE |
+| Tailscale | Compte + pre-auth key réutilisable |
+| GitHub | Fork du repo si vous changez `repoUrl` dans `nixos/hosts/k3s-cp-1.nix` |
+| Deploy key | Clé SSH lecture/écriture pour Argo CD Image Updater (dans sops) |
+
+### Personnalisation (valeurs par défaut)
+
+| Paramètre | Fichier | Valeur actuelle |
+| --------- | ------- | --------------- |
+| IP control-plane | `justfile`, `nixos/flake.nix` | `192.168.1.61` |
+| IP workers | idem | `.62`, `.63` |
+| IDs VM Proxmox | `justfile` `recreate` | `301`, `302`, `303` |
+| Host Proxmox | `justfile` | `proxade` |
+| Repo GitOps ArgoCD | `nixos/hosts/k3s-cp-1.nix` | `https://github.com/Waddenn/projet-etude-M1.git` |
+| ApplicationSet | `kubernetes/applications/platform/apps-applicationset.yaml` | même repo, branche `main` |
+
+Variables optionnelles : copier [`.env.example`](./.env.example) vers `.env`.
+
 ## Arborescence
 
 ```
 .
 ├── README.md
+├── AUDIT.md             # audit technique du projet
 ├── justfile             # tâches projet : just <recipe>
-├── docs/                # cahier des charges, cadre pédagogique
-├── proxmox/             # scripts côté Proxmox host (clone VMs, installation)
-├── nixos/               # flake + modules + hosts (1 source de vérité OS)
+├── .env.example         # variables d'environnement (just)
+├── docs/
+│   ├── architecture.md
+│   ├── cahier-des-charges.md
+│   └── demo-soutenance.md
+├── proxmox/             # scripts côté Proxmox (clone VMs, installation)
+├── nixos/               # flake + modules + hosts (source de vérité OS)
 │   ├── flake.nix
-│   ├── .sops.yaml       # recipients age (dev + 3 VMs)
+│   ├── .sops.yaml
 │   ├── modules/         # common, k3s, tailscale, secrets, k8s-bootstrap…
-│   ├── hosts/           # config par nœud (k3s-cp-1, k3s-worker-{1,2})
+│   ├── hosts/           # k3s-cp-1, k3s-worker-{1,2}
 │   └── secrets/         # secrets sops-encrypted (k3s_token, …)
-├── kubernetes/          # manifests synchronisés par ArgoCD
-│   ├── applications/    # plateforme (Apps Argo CD posées par la root app)
-│   │   ├── monitoring/  # kube-prometheus-stack + Loki + Alloy
-│   │   └── platform/    # ApplicationSet "apps" + Argo CD Image Updater
-│   └── apps/            # apps métier (1 dossier = 1 Application Argo CD via l'AppSet)
-│       └── projet-etude-app-demo/  # manifests pointant ghcr.io/waddenn/projet-etude-app-demo
-└── secrets/             # secrets dev-side (gitignored, sauf README)
+├── kubernetes/
+│   ├── applications/    # Applications Argo CD (root app → ce dossier)
+│   │   ├── monitoring/  # Prometheus, Loki, Alloy, Tempo
+│   │   ├── platform/    # AppSet, Image Updater, dashboards, Traefik NodePort
+│   │   ├── security/    # Vault, ESO, Dex, Trivy Operator
+│   │   ├── data/        # CloudNative-PG
+│   │   └── observability/  # Kepler
+│   ├── apps/            # 1 dossier = 1 app via ApplicationSet
+│   │   └── projet-etude-app-demo/
+│   └── loadtest/        # jobs hey, chaos probe/partition
+└── secrets/             # clés dev-side (gitignored, cf. secrets/README.md)
 ```
 
-## Démarrage rapide
+## Installation
+
+### Démarrage rapide
 
 ```bash
-# 1. DevShell : kubectl, helm, argocd, k9s, sops, age, just, …
+nix develop ./nixos
+# secrets : cf. secrets/README.md
+just redeploy
+just kubeconfig
+export KUBECONFIG=~/.kube/projet-etude
+just nodes && just argocd-apps
+```
+
+### Première installation (détaillée)
+
+```bash
+# 1. DevShell
 nix develop ./nixos
 
-# 2. Déposer les clés dev (cf. secrets/README.md)
-#   - secrets/ssh-deploy-key (+ .pub)
-#   - secrets/tailscale-authkey
+# 2. Secrets dev-side
+ssh-keygen -t ed25519 -N "" -C projet-etude-k3s -f secrets/ssh-deploy-key
+# tailscale-authkey → secrets/tailscale-authkey
 
-# 3. Pipeline complet (recreate VMs + install NixOS parallèle + GitOps)
+# 3. sops (clé dev + host keys persistantes)
+just sops-init
+# Coller la pubkey age dans nixos/.sops.yaml
+just sops-bootstrap
+just sops-edit   # k3s_token, discord_webhook_url, deploy key Image Updater
+
+# 4. Template Proxmox (une fois) puis déploiement
+# ssh root@proxade 'bash -s' < proxmox/create-template.sh
 just redeploy
 
-# 4. Récupérer le kubeconfig localement
+# 5. Accès cluster
 just kubeconfig
-
-# 5. Vérifier
+export KUBECONFIG=~/.kube/projet-etude
 just nodes
 just argocd-apps
 ```
@@ -78,85 +177,114 @@ Une fois le cluster up, les UIs sont exposées sur le tailnet par tailscale serv
 
 | UI         | URL                                               | Login          |
 | ---------- | ------------------------------------------------- | -------------- |
-| ArgoCD     | https://k3s-cp-1.<tailnet>.ts.net                | admin / *(cf. `just argocd-password`)* |
-| Grafana    | https://k3s-cp-1.<tailnet>.ts.net:8443           | admin / admin  |
-| Traefik / app-demo | https://k3s-cp-1.<tailnet>.ts.net:9443/app-demo | OIDC Dex |
+| ArgoCD     | `https://k3s-cp-1.<votre-tailnet>.ts.net` | admin / *(cf. `just argocd-password`)* |
+| Grafana    | `https://k3s-cp-1.<votre-tailnet>.ts.net:8443` | admin / admin |
+| Traefik / app-demo | `https://k3s-cp-1.<votre-tailnet>.ts.net:9443/app-demo` | OIDC Dex |
+
+Port-forward local : `just argocd-ui`, `just grafana`, `just prometheus`.
+
+## Scénario de démo
+
+```bash
+just demo    # vérifie status, nodes, ArgoCD, URL app
+```
+
+Scénario complet (~15 min) : [`docs/demo-soutenance.md`](./docs/demo-soutenance.md).
 
 ## Observabilité & SLO
 
-- **Dashboards Grafana** auto-importés : *Platform overview*, *App demo (métier)*,
-  *SLO & burn-rate*, *Worker & queue*.
-- **SLO disponibilité** : 99.5 % (burn-rate multi-fenêtres 5m/1h fast + 30m/6h slow,
-  cf. `kubernetes/apps/projet-etude-app-demo/prometheusrule.yaml`).
-- **Alerting** : Alertmanager → webhook Discord (secret sops + template
-  `nixos/modules/secrets.nix`).
-- **Traces distribuées** : OTLP gRPC → Tempo, propagation via colonne JSONB
-  `jobs.trace_context` jusqu'au worker (span CONSUMER lié).
-- **Logs ↔ traces** : derived field `trace_id` Loki → Tempo + retour vers Loki/Prometheus.
+- **Dashboards Grafana** : *Platform overview*, *App demo (métier)*, *SLO & burn-rate*, *Worker & queue*.
+- **SLO disponibilité** : 99,5 % (burn-rate multi-fenêtres, cf. `kubernetes/apps/projet-etude-app-demo/prometheusrule.yaml`).
+- **Alerting** : Alertmanager → webhook Discord (secret sops).
+- **Traces** : OTLP → Tempo, propagation `jobs.trace_context` jusqu'au worker.
+- **Kepler** : métriques énergie au niveau pod/nœud (dashboard plateforme).
 
 ## Chaos engineering
 
-Recettes prêtes pour démos de résilience (cf. `just chaos-*`) :
-
 ```bash
 just chaos-kill          # tue 1 pod api random
-just chaos-schedule      # active le CronJob killer (toutes les 30 min)
-just chaos-partition     # isole 1 pod via NetworkPolicy deny-all 60 s
-just chaos-probe         # 5 min de /healthz à 20 rps pendant chaos
-just demo-flaky          # injecte 50 % d'erreurs (déclenche burn-rate fast)
-just demo-slow           # injecte 800 ms de latence (déclenche p95 alert)
+just chaos-schedule      # CronJob killer (30 min)
+just chaos-unschedule    # désactive le CronJob
+just chaos-partition     # NetworkPolicy deny-all 60 s
+just chaos-probe         # 5 min /healthz à 20 rps
+just chaos-cpu           # charge CPU (HPA)
+just demo-flaky          # 50 % d'erreurs → burn-rate fast
+just demo-slow           # latence 800 ms → alerte p95
+just demo-panic          # panic récupérée + logs
+just demo-crash          # OOM simulé
+just demo-memleak        # fuite mémoire progressive
 ```
 
 ## Workflow GitOps
 
-1. Modifier un manifest dans `kubernetes/applications/`.
-2. `git push` → ArgoCD détecte le changement → sync automatique (auto-prune + self-heal).
-3. Pour un changement OS / cluster : modifier `nixos/`, `git push`, `just switch`.
+1. Modifier un manifest dans `kubernetes/applications/` ou `kubernetes/apps/`.
+2. `git push` → ArgoCD sync (auto-prune + self-heal).
+3. Changement OS : modifier `nixos/` → `just switch` (ou `just redeploy` si VMs neuves).
+4. Nouvelle image app : CI app → GHCR → Image Updater commit digest → resync.
+
+```
+push image (CI app) → GHCR → Image Updater → commit kustomization.yaml → ArgoCD sync
+```
 
 ## Recettes `just`
 
 ```bash
-just                  # liste tout
-just deploy           # nixos-anywhere parallèle sur les 3 VMs
-just switch           # nixos-rebuild switch (VMs déjà installées)
-just redeploy         # destroy + recreate + deploy
+just                  # liste complète
+just demo             # checks soutenance
+
+# Déploiement
+just deploy           # nixos-anywhere (3 VMs)
+just switch           # nixos-rebuild switch
+just redeploy         # recreate + deploy
+just recreate         # destroy/recreate VMs Proxmox
 just status           # état des 3 nœuds
-just kubeconfig       # pull kubeconfig dans ~/.kube/projet-etude
-just argocd-ui        # port-forward UI ArgoCD localhost:8080
-just grafana          # port-forward UI Grafana localhost:3000
-just sops-init        # générer une age key dev
-just sops-edit        # éditer le fichier de secrets encrypté
+just kubeconfig       # ~/.kube/projet-etude
+
+# Kubernetes / ArgoCD
+just nodes | just pods | just k get …
+just argocd-apps | just argocd-sync | just argocd-password
+
+# App démo / charge
+just loadtest | just hpa-watch | just app-status | just app-demo-url
+
+# Monitoring
+just grafana | just prometheus | just mon-status
+
+# Secrets sops
+just sops-init | just sops-bootstrap | just sops-edit | just sops-rotate | just sops-host-keys
 ```
 
 ## Sécurité — secrets
 
-- **Secrets dev-side** dans `secrets/` : clé SSH de déploiement, pre-auth Tailscale,
-  clé SSH ArgoCD Image Updater, SSH host keys persistantes des 3 nœuds.
-  Gitignored, à rotater hors-bande.
-- **Secrets cluster** dans `nixos/secrets/secrets.yaml` : k3s token, webhook Discord,
-  clé SSH image-updater. Encryptés avec sops + age (4 recipients : dev + 3 hosts).
-  Décryptés au boot par chaque nœud via sa SSH host key (dérivée en age via
-  `ssh-to-age`). Ajouter un nœud = `just sops-host-keys` puis `just sops-rotate`.
-- **Secrets runtime** : Vault (mode DEV) + External-Secrets Operator. Les secrets
-  applicatifs (`oidc-client`, `app-session`, `app-webhook`) sont projetés depuis Vault
-  via `ClusterSecretStore vault-backend`.
-- **App** : OIDC via Dex (rôles `viewer` / `operator`), session cookie signée
-  HMAC-SHA256, audit log (purge RGPD 90 j via CronJob hebdomadaire).
+- **Dev-side** (`secrets/`) : SSH deploy, Tailscale, host keys — voir [`secrets/README.md`](./secrets/README.md).
+- **Cluster** (`nixos/secrets/secrets.yaml`) : k3s token, Discord, deploy key Image Updater (sops + age).
+- **Runtime** : Vault DEV + External-Secrets (`oidc-client`, `app-session`, …).
+- **App** : OIDC Dex (`viewer` / `operator`), audit log, purge RGPD 90 j (CronJob).
 
 ## CI/CD
 
-- **`projet-etude` (infra)** — `.github/workflows/validate.yml` : yamllint,
-  actionlint, shellcheck, kubeconform, `nix flake check`, kube-score.
-- **`projet-etude-app-demo` (app)** — `.github/workflows/build.yml` :
-  golangci-lint v2.6, `go test -race -cover`, build matriciel
-  (api / worker / audit-purge), scan Trivy bloquant (CRITICAL/HIGH),
-  push GHCR avec tags `main` + `sha-<long>`.
-- **Livraison continue** : ArgoCD Image Updater détecte les nouveaux digests
-  sur GHCR et commit la mise à jour dans `kubernetes/apps/.../kustomization.yaml`
-  → resync automatique.
+- **Infra** — [`.github/workflows/validate.yml`](./.github/workflows/validate.yml) : yamllint, actionlint, shellcheck, kubeconform, `nix flake check`, kube-score.
+- **App** — repo [projet-etude-app-demo](https://github.com/Waddenn/projet-etude-app-demo) : lint, tests, build, Trivy, push GHCR.
+- **Livraison** : Argo CD Image Updater → commit digest dans `kustomization.yaml` → resync.
 
-## Audit technique
+## Dépannage
 
-Un audit factuel complet du projet (architecture, IaC, conteneurisation,
-orchestration, sécurité, observabilité, KPIs réels, dette technique) est
-disponible dans [`AUDIT.md`](./AUDIT.md).
+| Symptôme | Piste |
+| -------- | ----- |
+| SSH timeout sur redeploy | `just ping`, `just wait-ssh`, vérifier IPs/VMs Proxmox |
+| ArgoCD apps `Unknown`/repo erreur | URL publique ou secret repo ; `just argocd-sync` |
+| sops ne déchiffre pas après recreate | `just sops-bootstrap` puis `just redeploy` |
+| Pas de métriques pods | Attendre metrics-server ; `just mon-status` |
+| OIDC app-demo échoue | Dex up ; URL `:9443/app-demo` ; rôle viewer/operator |
+| Image Updater ne commit pas | Deploy key dans sops ; droits write sur le repo |
+
+Runbook détaillé : section *Exploitation* dans [`AUDIT.md`](./AUDIT.md).
+
+## Documentation
+
+| Document | Contenu |
+| -------- | ------- |
+| [`AUDIT.md`](./AUDIT.md) | Audit technique, dettes, KPIs |
+| [`docs/architecture.md`](./docs/architecture.md) | Flux détaillés, composants |
+| [`docs/cahier-des-charges.md`](./docs/cahier-des-charges.md) | Périmètre et critères d'acceptation |
+| [`docs/demo-soutenance.md`](./docs/demo-soutenance.md) | Script oral + commandes |

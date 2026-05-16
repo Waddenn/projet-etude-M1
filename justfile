@@ -19,6 +19,25 @@ w2_ip := "192.168.1.63"
 default:
     @just --list
 
+# Vérifications rapides pour une soutenance (cf. docs/demo-soutenance.md)
+demo:
+    @echo "=== État des nœuds ==="
+    just status
+    @echo
+    @echo "=== Nodes Kubernetes ==="
+    just nodes
+    @echo
+    @echo "=== Applications ArgoCD ==="
+    just argocd-apps
+    @echo
+    @echo "=== App démo ==="
+    just app-demo-url
+    @echo
+    @echo "Étapes suivantes (manuel) :"
+    @echo "  just loadtest && just hpa-watch     # autoscaling"
+    @echo "  just demo-flaky                     # alertes burn-rate SLO"
+    @echo "  just chaos-kill && just chaos-probe # résilience"
+
 # ---------- SSH ----------
 
 # SSH vers le control-plane (LAN)
