@@ -115,3 +115,63 @@ spec:
       ports:
         - port: 443
           protocol: TCP
+---
+# audit-purge : accès Postgres seulement.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: projet-etude-app-demo-audit-purge
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: projet-etude-app-demo
+      app.kubernetes.io/component: audit-purge
+  policyTypes: [Ingress, Egress]
+  # Pas d'ingress (CronJob de fond, ne sert pas de port).
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: ticketdb
+      ports:
+        - port: 5432
+          protocol: TCP
+---
+# chaos-killer : DNS + kube-apiserver via le service kubernetes (default ns).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: projet-etude-app-demo-chaos-killer
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: projet-etude-app-demo
+      app.kubernetes.io/component: chaos-killer
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # kubernetes.default.svc → kube-apiserver
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: default
+      ports:
+        - port: 443
+          protocol: TCP

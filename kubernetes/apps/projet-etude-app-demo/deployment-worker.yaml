@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/name: projet-etude-app-demo
     app.kubernetes.io/component: worker
 spec:
-  replicas: 1
+  # Pas de `replicas:` explicite : géré par l'HPA worker (minReplicas=1).
   selector:
     matchLabels:
       app.kubernetes.io/name: projet-etude-app-demo
@@ -66,9 +66,10 @@ spec:
               value: "projet-etude-app-demo-worker"
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.namespace=projet-etude,deployment.environment=lab"
+          imagePullPolicy: IfNotPresent
           resources:
-            requests: { cpu: 50m, memory: 32Mi }
-            limits:   { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 50m, memory: 32Mi, ephemeral-storage: 64Mi }
+            limits:   { cpu: 500m, memory: 128Mi, ephemeral-storage: 256Mi }
           readinessProbe:
             httpGet: { path: /readyz, port: metrics }
             periodSeconds: 5

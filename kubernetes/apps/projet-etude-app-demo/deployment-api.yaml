@@ -6,7 +6,8 @@ metadata:
     app.kubernetes.io/name: projet-etude-app-demo
     app.kubernetes.io/component: api
 spec:
-  replicas: 2
+  # Pas de `replicas:` explicite : géré par l'HPA (minReplicas=2).
+  # Forcer une valeur ici créerait un drift continu HPA ↔ apply.
   selector:
     matchLabels:
       app.kubernetes.io/name: projet-etude-app-demo
@@ -101,9 +102,10 @@ spec:
             #    secretKeyRef:
             #      name: app-session
             #      key: key
+          imagePullPolicy: IfNotPresent
           resources:
-            requests: { cpu: 50m, memory: 32Mi }
-            limits:   { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 50m, memory: 32Mi, ephemeral-storage: 64Mi }
+            limits:   { cpu: 500m, memory: 128Mi, ephemeral-storage: 256Mi }
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 5
