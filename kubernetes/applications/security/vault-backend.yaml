@@ -1,0 +1,36 @@
+# ClusterSecretStore + Secret du token Vault.
+#
+# La CRD external-secrets.io/ClusterSecretStore est installée par l'Application
+# `external-secrets` ci-dessus. ArgoCD applique les ressources de cette
+# Application avant celles annotées sync-wave > 0, puis nous appliquons le
+# ClusterSecretStore dans une seconde vague. SkipDryRunOnMissingResource évite
+# l'échec de validation tant que la CRD n'est pas enregistrée par l'API server.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vault-token
+  namespace: external-secrets
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+type: Opaque
+stringData:
+  token: "root-dev-token"
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: vault-backend
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  provider:
+    vault:
+      server: "http://vault.security.svc.cluster.local:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        tokenSecretRef:
+          name: vault-token
+          namespace: external-secrets
+          key: token
