@@ -28,6 +28,8 @@ resources:
 - cronjob-audit-purge.yaml
 - externalsecrets.yaml
 - dashboard.yaml
+- dashboard-slo.yaml
+- dashboard-worker.yaml
 images:
 - name: ghcr.io/waddenn/projet-etude-app-demo-api
   digest: sha256:40d5956d289d0791940fea9016f6a6cafd332eca960dbd8e7b10336ae37c3d70

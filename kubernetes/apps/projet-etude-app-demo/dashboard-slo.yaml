@@ -1,0 +1,156 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: projet-etude-app-demo-slo-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  app-demo-slo.json: |
+    {
+      "title": "App demo — SLO & burn-rate",
+      "uid": "projet-etude-app-demo-slo",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-6h", "to": "now" },
+      "tags": ["projet-etude", "slo"],
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "SLO availability target",
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 3 } },
+          "options": { "colorMode": "value", "graphMode": "none" },
+          "targets": [
+            { "expr": "0.995", "refId": "A", "instant": true }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Disponibilité 7j",
+          "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 4,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 0.99 },
+                  { "color": "green", "value": 0.995 }
+                ]
+              }
+            }
+          },
+          "options": { "colorMode": "background", "graphMode": "area" },
+          "targets": [
+            {
+              "expr": "1 - (sum(rate(http_requests_total{namespace=\"projet-etude-app-demo\",status=~\"5..\"}[7d])) / clamp_min(sum(rate(http_requests_total{namespace=\"projet-etude-app-demo\"}[7d])), 0.001))",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "stat",
+          "title": "Error budget restant (7j)",
+          "gridPos": { "h": 4, "w": 5, "x": 9, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 1,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 0.2 },
+                  { "color": "green", "value": 0.5 }
+                ]
+              }
+            }
+          },
+          "options": { "colorMode": "background", "graphMode": "area" },
+          "targets": [
+            {
+              "expr": "1 - ((sum(rate(http_requests_total{namespace=\"projet-etude-app-demo\",status=~\"5..\"}[7d])) / clamp_min(sum(rate(http_requests_total{namespace=\"projet-etude-app-demo\"}[7d])), 0.001)) / 0.005)",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Burn-rate multi-fenêtres (×SLO)",
+          "description": "Fast burn alert dès que 5m ET 1h dépassent 14.4×0.005 = 0.072. Slow burn dès que 30m ET 6h dépassent 6×0.005 = 0.03.",
+          "gridPos": { "h": 8, "w": 14, "x": 14, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "percentunit", "decimals": 4 } },
+          "targets": [
+            { "expr": "appdemo:http_errors:ratio_rate5m",  "legendFormat": "5m",  "refId": "A" },
+            { "expr": "appdemo:http_errors:ratio_rate30m", "legendFormat": "30m", "refId": "B" },
+            { "expr": "appdemo:http_errors:ratio_rate1h",  "legendFormat": "1h",  "refId": "C" },
+            { "expr": "appdemo:http_errors:ratio_rate6h",  "legendFormat": "6h",  "refId": "D" },
+            { "expr": "0.072", "legendFormat": "fast burn threshold (14.4×)", "refId": "E" },
+            { "expr": "0.030", "legendFormat": "slow burn threshold (6×)",    "refId": "F" }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Latence HTTP (p50 / p95 / p99) — exemplars activés",
+          "gridPos": { "h": 8, "w": 14, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[5m])))",
+              "legendFormat": "p50", "refId": "A", "exemplar": true
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[5m])))",
+              "legendFormat": "p95", "refId": "B", "exemplar": true
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[5m])))",
+              "legendFormat": "p99", "refId": "C", "exemplar": true
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Requests/s par status",
+          "gridPos": { "h": 8, "w": 14, "x": 14, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (status) (rate(http_requests_total{namespace=\"projet-etude-app-demo\"}[1m]))",
+              "legendFormat": "{{status}}", "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "table",
+          "title": "Alertes burn-rate actives",
+          "gridPos": { "h": 6, "w": 28, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "ALERTS{namespace=\"projet-etude-app-demo\", alertstate=\"firing\"}",
+              "instant": true, "refId": "A", "format": "table"
+            }
+          ],
+          "transformations": [
+            { "id": "organize", "options": { "excludeByName": { "__name__": true, "Time": true, "Value": true } } }
+          ]
+        }
+      ]
+    }
