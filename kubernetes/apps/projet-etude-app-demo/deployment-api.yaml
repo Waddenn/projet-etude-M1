@@ -6,7 +6,8 @@ metadata:
     app.kubernetes.io/name: projet-etude-app-demo
     app.kubernetes.io/component: api
 spec:
-  replicas: 2
+  # Pas de `replicas:` explicite : géré par l'HPA (minReplicas=2).
+  # Forcer une valeur ici créerait un drift continu HPA ↔ apply.
   selector:
     matchLabels:
       app.kubernetes.io/name: projet-etude-app-demo
@@ -75,35 +76,36 @@ spec:
                   fieldPath: metadata.annotations['app.kubernetes.io/version']
             # OIDC via Dex (projeté depuis Vault par ExternalSecrets).
             # Désactivé tant que Vault n'est pas bootstrappé. Bascule :
-            #   1. just vault-bootstrap (kv put des 3 entrées)
-            #   2. décommenter le bloc ci-dessous et `just k apply -k kubernetes/apps/projet-etude-app-demo`
+            #    1. just vault-bootstrap (kv put des 3 entrées)
+            #    2. décommenter le bloc ci-dessous et `just k apply -k kubernetes/apps/projet-etude-app-demo`
             # Sans ces variables, l'app tourne en "dev mode" :
             # toutes les requêtes sont authentifiées en tant que dev/operator.
-            #- name: OIDC_ISSUER_URL
-            #  value: "http://dex.security.svc.cluster.local:5556/dex"
-            #- name: OIDC_CLIENT_ID
-            #  value: "projet-etude-app-demo"
-            #- name: OIDC_CLIENT_SECRET
-            #  valueFrom:
-            #    secretKeyRef:
-            #      name: oidc-client
-            #      key: client-secret
-            #- name: OIDC_REDIRECT_URL
-            #  value: "https://projet-etude.tail-scale.ts.net:9443/app-demo/auth/callback"
-            #- name: OIDC_VIEWER_GROUP
-            #  value: "viewers"
-            #- name: OIDC_OPERATOR_GROUP
-            #  value: "operators"
-            #- name: OIDC_OPERATOR_EMAILS
-            #  value: "operator@projet-etude.local"
-            #- name: SESSION_KEY
-            #  valueFrom:
-            #    secretKeyRef:
-            #      name: app-session
-            #      key: key
+            # - name: OIDC_ISSUER_URL
+            #   value: "http://dex.security.svc.cluster.local:5556/dex"
+            # - name: OIDC_CLIENT_ID
+            #   value: "projet-etude-app-demo"
+            # - name: OIDC_CLIENT_SECRET
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: oidc-client
+            #       key: client-secret
+            # - name: OIDC_REDIRECT_URL
+            #   value: "https://projet-etude.tail-scale.ts.net:9443/app-demo/auth/callback"
+            # - name: OIDC_VIEWER_GROUP
+            #   value: "viewers"
+            # - name: OIDC_OPERATOR_GROUP
+            #   value: "operators"
+            # - name: OIDC_OPERATOR_EMAILS
+            #   value: "operator@projet-etude.local"
+            # - name: SESSION_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: app-session
+            #       key: key
+          imagePullPolicy: IfNotPresent
           resources:
-            requests: { cpu: 50m, memory: 32Mi }
-            limits:   { cpu: 500m, memory: 128Mi }
+            requests: { cpu: 50m, memory: 32Mi, ephemeral-storage: 64Mi }
+            limits:   { cpu: 500m, memory: 128Mi, ephemeral-storage: 256Mi }
           readinessProbe:
             httpGet: { path: /readyz, port: http }
             periodSeconds: 5

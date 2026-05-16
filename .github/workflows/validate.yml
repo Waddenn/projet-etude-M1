@@ -61,3 +61,27 @@ jobs:
       - name: nix flake check (eval all hosts)
         working-directory: nixos
         run: nix flake check --no-build --show-trace
+
+  kube-score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kube-score
+        run: |
+          curl -sSL https://github.com/zegl/kube-score/releases/download/v1.20.0/kube-score_1.20.0_linux_amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kube-score
+      # Tests ignorés volontairement :
+      # - container-image-pull-policy : pin par digest, IfNotPresent est correct
+      # - container-security-context-user-group-id : bitnami/kubectl impose un user fixe
+      # - container-security-context-readonlyrootfilesystem : kubectl écrit dans ~/.kube/cache
+      # - pod-networkpolicy : couvertures déjà ok pour api/worker, faux positifs sur CronJobs
+      - name: Score app manifests
+        run: |
+          kubectl kustomize kubernetes/apps/projet-etude-app-demo \
+            | kube-score score \
+                --output-format ci \
+                --ignore-test container-image-pull-policy \
+                --ignore-test container-security-context-user-group-id \
+                --ignore-test container-security-context-readonlyrootfilesystem \
+                --ignore-test pod-networkpolicy \
+                -
