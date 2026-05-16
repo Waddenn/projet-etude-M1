@@ -6,6 +6,7 @@ spec:
   type: ClusterIP
   selector:
     app.kubernetes.io/name: projet-etude-app-demo
+    app.kubernetes.io/component: api
   ports:
     - name: http
       port: 80

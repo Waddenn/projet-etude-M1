@@ -2,14 +2,26 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
 - database.yaml
-- deployment.yaml
+- deployment-api.yaml
+- deployment-worker.yaml
 - service.yaml
+- service-worker.yaml
 - hpa.yaml
+- hpa-worker.yaml
 - ingress.yaml
 - servicemonitor.yaml
+- servicemonitor-worker.yaml
 - prometheusrule.yaml
 - networkpolicy.yaml
+- pdb.yaml
+- chaos.yaml
+- cronjob-audit-purge.yaml
+- externalsecrets.yaml
 - dashboard.yaml
 images:
-- name: ghcr.io/waddenn/projet-etude-app-demo
-  digest: sha256:3fc68107045b110ad19e90951868936fef1953365d2e262cde6d5372190b4fdc
+- name: ghcr.io/waddenn/projet-etude-app-demo-api
+  newTag: main
+- name: ghcr.io/waddenn/projet-etude-app-demo-worker
+  newTag: main
+- name: ghcr.io/waddenn/projet-etude-app-demo-audit-purge
+  newTag: main

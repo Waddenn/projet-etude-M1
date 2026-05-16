@@ -1,0 +1,83 @@
+# Chaos engineering minimaliste : un CronJob qui tue un pod random de l'app
+# à intervalle régulier, avec un ServiceAccount au privilège minimal (Role/
+# RoleBinding scopés au namespace courant).
+#
+# CronJob suspendu par défaut. Activer avec :
+#   kubectl -n projet-etude-app-demo patch cronjob projet-etude-app-demo-chaos-killer \
+#     --type merge -p '{"spec":{"suspend":false}}'
+# Ou via la recette `just chaos-schedule`.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-killer
+  labels: { app.kubernetes.io/name: projet-etude-app-demo }
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: chaos-killer
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-killer
+subjects:
+  - kind: ServiceAccount
+    name: chaos-killer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: chaos-killer
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: projet-etude-app-demo-chaos-killer
+  labels: { app.kubernetes.io/name: projet-etude-app-demo }
+spec:
+  schedule: "*/30 * * * *"   # toutes les 30 min ; suspend=true par défaut
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: chaos-killer
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: kill
+              image: bitnami/kubectl:1.31
+              command: [/bin/bash, -c]
+              args:
+                - |
+                  set -eu
+                  # Choisit un pod random parmi les api (composant le plus
+                  # facile à voir redémarrer dans la démo).
+                  pod=$(kubectl get pods \
+                        -l app.kubernetes.io/name=projet-etude-app-demo,app.kubernetes.io/component=api \
+                        -o jsonpath='{.items[*].metadata.name}' \
+                      | tr ' ' '\n' | shuf -n1)
+                  if [ -z "$pod" ]; then
+                    echo "no api pods found"; exit 0
+                  fi
+                  echo "chaos: deleting pod $pod"
+                  kubectl delete pod "$pod" --grace-period=10
+              resources:
+                requests: { cpu: 10m, memory: 32Mi }
+                limits:   { memory: 64Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]

@@ -1,0 +1,16 @@
+# Partition réseau synthétique : déclare une NetworkPolicy ultra-restrictive
+# (DENY ALL ingress + egress) sur les pods api. Combiné avec la NP existante
+# `projet-etude-app-demo-api`, l'union des règles ne change rien : Kubernetes
+# NP est additif. C'est pourquoi on cible un label dédié `chaos.partition=on`
+# qu'on POSE temporairement sur 1 pod random (cf. recette just chaos-partition).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chaos-partition
+  namespace: projet-etude-app-demo
+spec:
+  podSelector:
+    matchLabels:
+      chaos.partition: "on"
+  policyTypes: [Ingress, Egress]
+  # Aucune règle ingress/egress : tout est refusé.

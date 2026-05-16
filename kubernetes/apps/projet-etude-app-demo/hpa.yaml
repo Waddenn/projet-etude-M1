@@ -7,7 +7,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: projet-etude-app-demo
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 8
   metrics:
     - type: Resource
