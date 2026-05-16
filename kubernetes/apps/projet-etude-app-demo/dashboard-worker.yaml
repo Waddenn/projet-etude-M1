@@ -1,0 +1,142 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: projet-etude-app-demo-worker-dashboard
+  labels:
+    grafana_dashboard: "1"
+data:
+  app-demo-worker.json: |
+    {
+      "title": "App demo — Worker & queue",
+      "uid": "projet-etude-app-demo-worker",
+      "schemaVersion": 39,
+      "version": 1,
+      "refresh": "10s",
+      "time": { "from": "now-30m", "to": "now" },
+      "tags": ["projet-etude", "worker"],
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Queue depth (ready)",
+          "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 20 },
+                  { "color": "red", "value": 50 }
+                ]
+              }
+            }
+          },
+          "options": { "colorMode": "background", "graphMode": "area" },
+          "targets": [
+            { "expr": "max(jobs_queue_depth{namespace=\"projet-etude-app-demo\"})", "refId": "A" }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "stat",
+          "title": "Worker replicas",
+          "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas_ready{namespace=\"projet-etude-app-demo\",deployment=\"projet-etude-app-demo-worker\"}",
+              "legendFormat": "ready", "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Jobs/min par kind",
+          "gridPos": { "h": 6, "w": 16, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (kind) (rate(jobs_enqueued_total{namespace=\"projet-etude-app-demo\"}[1m])) * 60",
+              "legendFormat": "enqueued {{kind}}", "refId": "A"
+            },
+            {
+              "expr": "sum by (kind, outcome) (rate(jobs_processed_total{namespace=\"projet-etude-app-demo\"}[1m])) * 60",
+              "legendFormat": "processed {{kind}} ({{outcome}})", "refId": "B"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "Taux d'échec (10m)",
+          "gridPos": { "h": 6, "w": 14, "x": 0, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "percentunit" } },
+          "targets": [
+            {
+              "expr": "sum(rate(jobs_processed_total{namespace=\"projet-etude-app-demo\",outcome=\"error\"}[10m])) / clamp_min(sum(rate(jobs_processed_total{namespace=\"projet-etude-app-demo\"}[10m])), 0.001)",
+              "legendFormat": "error rate", "refId": "A"
+            },
+            { "expr": "0.2", "legendFormat": "alerting threshold", "refId": "B" }
+          ]
+        },
+        {
+          "id": 5,
+          "type": "timeseries",
+          "title": "Latence job (p50/p95/p99) — exemplars",
+          "gridPos": { "h": 6, "w": 14, "x": 14, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le, kind) (rate(job_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[5m])))",
+              "legendFormat": "p50 {{kind}}", "refId": "A", "exemplar": true
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, kind) (rate(job_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[5m])))",
+              "legendFormat": "p95 {{kind}}", "refId": "B", "exemplar": true
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le, kind) (rate(job_duration_seconds_bucket{namespace=\"projet-etude-app-demo\"}[5m])))",
+              "legendFormat": "p99 {{kind}}", "refId": "C", "exemplar": true
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "timeseries",
+          "title": "Latence DB worker p95 par op",
+          "gridPos": { "h": 6, "w": 14, "x": 0, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le, op) (rate(db_query_duration_seconds_bucket{namespace=\"projet-etude-app-demo\",op=~\"claim_job|complete_job|fail_job|queue_depth\"}[5m])))",
+              "legendFormat": "{{op}}", "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "type": "timeseries",
+          "title": "CPU/RAM worker pods",
+          "gridPos": { "h": 6, "w": 14, "x": 14, "y": 12 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"projet-etude-app-demo\",container=\"worker\"}[1m]))",
+              "legendFormat": "cpu {{pod}}", "refId": "A"
+            },
+            {
+              "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"projet-etude-app-demo\",container=\"worker\"}) / 1024 / 1024",
+              "legendFormat": "mem (MiB) {{pod}}", "refId": "B"
+            }
+          ]
+        }
+      ]
+    }

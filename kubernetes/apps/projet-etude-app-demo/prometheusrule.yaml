@@ -48,6 +48,8 @@ spec:
           annotations:
             summary: "App demo: burn-rate rapide (2% du budget d'erreur en 1h)"
             description: "Le taux d'erreur 5xx sur 5m ET 1h dépasse 14.4x le SLO 99.5%. Pager."
+            runbook_url: "https://github.com/Waddenn/projet-etude-M1/blob/main/docs/runbook.md#appdemoslo-error-budget-burn-fast"
+            dashboard_url: "https://grafana.local/d/projet-etude-app-demo-slo"
         - alert: AppDemoSLOErrorBudgetBurnSlow
           expr: |
             appdemo:http_errors:ratio_rate30m > (6 * 0.005)
@@ -58,6 +60,8 @@ spec:
           annotations:
             summary: "App demo: burn-rate lent (5% du budget en 6h)"
             description: "Erreurs 5xx soutenues sur 30m ET 6h au-dessus de 6x le SLO."
+            runbook_url: "https://github.com/Waddenn/projet-etude-M1/blob/main/docs/runbook.md#appdemoslo-error-budget-burn-slow"
+            dashboard_url: "https://grafana.local/d/projet-etude-app-demo-slo"
 
     - name: projet-etude-app-demo.rules
       rules:
@@ -88,6 +92,8 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: "App demo: backlog worker > 50 jobs depuis 5 min"
+            runbook_url: "https://github.com/Waddenn/projet-etude-M1/blob/main/docs/runbook.md#appdemo-job-queue-backlog"
+            dashboard_url: "https://grafana.local/d/projet-etude-app-demo-worker"
         - alert: AppDemoJobErrorRate
           expr: |
             sum(rate(jobs_processed_total{namespace="projet-etude-app-demo",outcome="error"}[10m]))
@@ -98,3 +104,5 @@ spec:
           labels: { severity: warning }
           annotations:
             summary: "App demo: >20% des jobs échouent sur 10 min"
+            runbook_url: "https://github.com/Waddenn/projet-etude-M1/blob/main/docs/runbook.md#appdemo-job-error-rate"
+            dashboard_url: "https://grafana.local/d/projet-etude-app-demo-worker"
