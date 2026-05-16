@@ -20,7 +20,7 @@ resources:
 - dashboard.yaml
 images:
 - name: ghcr.io/waddenn/projet-etude-app-demo-api
-  newTag: main
+  digest: sha256:40d5956d289d0791940fea9016f6a6cafd332eca960dbd8e7b10336ae37c3d70
 - name: ghcr.io/waddenn/projet-etude-app-demo-worker
   digest: sha256:9be130f2ec731a64fd3f0fa43fccc364594159409868dca056ed1b81b4981b84
 - name: ghcr.io/waddenn/projet-etude-app-demo-audit-purge
