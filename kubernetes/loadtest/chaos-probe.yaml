@@ -1,0 +1,37 @@
+# Probe de résilience : pendant 5 min, on hammer /healthz à 20 rps et on
+# compte les succès / échecs. À lancer en parallèle d'un scénario chaos
+# (chaos-kill, chaos-partition, chaos-cpu, etc.) pour mesurer l'impact réel.
+#
+# Sortie : un récap "Status code distribution" dans les logs (200, 0 = erreurs
+# connexion, etc.). Utile dans la vidéo : on peut afficher qu'on garde >99 %
+# de succès même pendant qu'on tue des pods.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chaos-probe
+  namespace: projet-etude-app-demo
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chaos-probe
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: probe
+          image: ghcr.io/rakyll/hey:latest
+          args:
+            - -z
+            - 5m
+            - -c
+            - "5"
+            - -q
+            - "20"
+            - -t
+            - "3"
+            - http://projet-etude-app-demo.projet-etude-app-demo.svc.cluster.local/healthz
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 64Mi }

@@ -63,7 +63,14 @@ redeploy: recreate wait-ssh deploy
 # Attend que SSH réponde sur les 3 nœuds
 wait-ssh:
     @echo "Attente SSH sur les 3 nœuds..."
-    @until for ip in {{cp_ip}} {{w1_ip}} {{w2_ip}}; do timeout 3 bash -c "</dev/tcp/$ip/22" 2>/dev/null || exit 1; done; do sleep 5; done
+    @while :; do \
+        ok=1; \
+        for ip in {{cp_ip}} {{w1_ip}} {{w2_ip}}; do \
+            timeout 3 bash -c "</dev/tcp/$ip/22" 2>/dev/null || { ok=0; break; }; \
+        done; \
+        [ "$ok" = "1" ] && break; \
+        sleep 5; \
+    done
     @echo "OK"
 
 # ---------- Diagnostic ----------
@@ -179,6 +186,84 @@ app-status:
     @echo
     KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo top pods 2>/dev/null || echo "(metrics-server pas prêt)"
 
+# ---------- Démo SLI / chaos ----------
+# Injecte un taux d'erreur synthétique pendant 90s (exerce les alertes burn-rate)
+demo-flaky rate="0.5" duration="90":
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    url="https://$host:9443/app-demo/api/flaky?rate={{rate}}"; \
+    echo "Hammering $url for {{duration}}s"; \
+    end=$(( $(date +%s) + {{duration}} )); \
+    while [ $(date +%s) -lt $end ]; do curl -ksS -o /dev/null "$url" & sleep 0.05; done; wait
+
+# Injecte une latence synthétique pendant 90s (exerce alerte p95)
+demo-slow ms="800" duration="90":
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    url="https://$host:9443/app-demo/api/slow?ms={{ms}}"; \
+    echo "Slow-hammering $url for {{duration}}s"; \
+    end=$(( $(date +%s) + {{duration}} )); \
+    while [ $(date +%s) -lt $end ]; do curl -ksS -o /dev/null "$url" & sleep 0.2; done; wait
+
+# Force un panic (recovered, 500) puis affiche le log côté pod
+demo-panic:
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    curl -ksS -o /dev/null "https://$host:9443/app-demo/api/panic" && echo "panic envoyé"
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo logs -l app.kubernetes.io/component=api --tail=5 --since=10s
+
+# Crash hard : OOM simulé, démontre le restart Kubernetes
+demo-crash:
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    curl -ksS "https://$host:9443/app-demo/api/crash" || true
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo get pods -l app.kubernetes.io/component=api -w
+
+# Fuite mémoire : alloue mb MiB et les conserve (à répéter pour atteindre la limit)
+demo-memleak mb="64":
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    curl -ksS "https://$host:9443/app-demo/api/memleak?mb={{mb}}"
+
+# ---------- Chaos engineering ----------
+# Tue un pod api au hasard (single shot). À utiliser avec `chaos-probe` en parallèle.
+chaos-kill:
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo get pods \
+        -l app.kubernetes.io/name=projet-etude-app-demo,app.kubernetes.io/component=api \
+        -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | shuf -n1 | \
+        xargs -r -I{} KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo delete pod {} --grace-period=10
+
+# Active le CronJob qui tue un pod toutes les 30 min (continue jusqu'à `chaos-unschedule`)
+chaos-schedule:
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo patch cronjob \
+        projet-etude-app-demo-chaos-killer --type merge -p '{"spec":{"suspend":false}}'
+
+chaos-unschedule:
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo patch cronjob \
+        projet-etude-app-demo-chaos-killer --type merge -p '{"spec":{"suspend":true}}'
+
+# Isole un pod api random du réseau pendant `duration` secondes (label + NP DENY ALL)
+chaos-partition duration="60":
+    @KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo apply -f kubernetes/loadtest/chaos-partition.yaml >/dev/null
+    @pod=$(KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo get pods \
+        -l app.kubernetes.io/name=projet-etude-app-demo,app.kubernetes.io/component=api \
+        -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | shuf -n1); \
+    echo "partitioning $pod for {{duration}}s"; \
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo label pod "$pod" chaos.partition=on --overwrite >/dev/null; \
+    sleep {{duration}}; \
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo label pod "$pod" chaos.partition- >/dev/null 2>&1 || true; \
+    echo "partition lifted on $pod"
+
+# Lance le job de probe : 5 min de hits /healthz à 20 rps, tail des résultats
+chaos-probe:
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo delete job chaos-probe --ignore-not-found
+    KUBECONFIG={{kubecfg}} kubectl apply -f kubernetes/loadtest/chaos-probe.yaml
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo wait --for=condition=Ready pod -l job-name=chaos-probe --timeout=60s
+    KUBECONFIG={{kubecfg}} kubectl -n projet-etude-app-demo logs -f -l job-name=chaos-probe
+
+# Charge CPU répétée sur api (sature HPA), 90s par défaut
+chaos-cpu duration="90":
+    @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
+    url="https://$host:9443/app-demo/work?ms=500"; \
+    end=$(( $(date +%s) + {{duration}} )); \
+    echo "CPU chaos sur $url pendant {{duration}}s"; \
+    while [ $(date +%s) -lt $end ]; do for _ in 1 2 3 4 5 6 7 8; do curl -ksS -o /dev/null "$url" & done; sleep 0.5; done; wait
+
 # Affiche l'URL Tailnet de l'app démo et fait un curl
 app-demo-url:
     @host=$(ssh {{ssh_opts}} ops@{{cp_ip}} 'tailscale status --self --json' | jq -r '.Self.DNSName' | sed 's/\.$//'); \
@@ -187,6 +272,11 @@ app-demo-url:
     curl -ksS "$url"
 
 # ---------- Secrets (sops-nix) ----------
+
+# Génère les SSH host keys persistantes des 3 VMs et aligne .sops.yaml.
+# Idempotent : ne fait rien si déjà bootstrappé.
+sops-bootstrap:
+    distrobox enter nix-deploy -- bash -lc 'cd {{justfile_directory()}} && ./proxmox/bootstrap-host-keys.sh'
 
 # Génère une age key dev locale (~/.config/sops/age/keys.txt) si absente
 sops-init:

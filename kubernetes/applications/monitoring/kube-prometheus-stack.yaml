@@ -64,6 +64,10 @@ spec:
         prometheus:
           prometheusSpec:
             retention: 7d
+            # Stockage d'exemplars : trace_id attaché aux histogrammes via
+            # ObserveWithExemplar côté Go, exploité par Tempo dans Grafana.
+            enableFeatures:
+              - exemplar-storage
             resources:
               requests: { cpu: 100m, memory: 512Mi }
               limits:   { memory: 1Gi }
@@ -119,6 +123,46 @@ spec:
               type: loki
               url: http://loki-gateway.monitoring.svc.cluster.local
               access: proxy
+              jsonData:
+                # Saut Loki → Tempo en cliquant sur trace_id dans une ligne de log.
+                derivedFields:
+                  - datasourceUid: tempo
+                    matcherRegex: '"trace_id":"(\w+)"'
+                    name: TraceID
+                    url: "$${__value.raw}"
+            - name: Tempo
+              type: tempo
+              uid: tempo
+              url: http://tempo.monitoring.svc.cluster.local:3100
+              access: proxy
+              jsonData:
+                # Lien trace → logs : Grafana ouvre Loki filtré sur le trace_id.
+                tracesToLogsV2:
+                  datasourceUid: loki
+                  spanStartTimeShift: "-1m"
+                  spanEndTimeShift: "1m"
+                  filterByTraceID: true
+                  customQuery: true
+                  query: '{namespace="$${__span.tags["k8s.namespace.name"]}"} |= "$${__span.traceId}"'
+                # Lien trace → métriques (RED) si recherchées par service.
+                tracesToMetrics:
+                  datasourceUid: prometheus
+                  tags:
+                    - { key: 'service.name', value: 'service' }
+                serviceMap:
+                  datasourceUid: prometheus
+                nodeGraph: { enabled: true }
+            # Ajout au datasource Prometheus par défaut : exemplars vers Tempo.
+            - name: PrometheusExemplarLink
+              type: prometheus
+              uid: prometheus-exemplars
+              url: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+              access: proxy
+              isDefault: false
+              jsonData:
+                exemplarTraceIdDestinations:
+                  - name: trace_id
+                    datasourceUid: tempo
         kubeEtcd:
           enabled: false
         kubeControllerManager:

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: projet-etude-app-demo-worker
+  labels:
+    app.kubernetes.io/name: projet-etude-app-demo
+    app.kubernetes.io/component: worker
+spec:
+  type: ClusterIP
+  clusterIP: None  # headless : on ne route pas de trafic, on l'utilise pour le scrape
+  selector:
+    app.kubernetes.io/name: projet-etude-app-demo
+    app.kubernetes.io/component: worker
+  ports:
+    - name: metrics
+      port: 8081
+      targetPort: metrics

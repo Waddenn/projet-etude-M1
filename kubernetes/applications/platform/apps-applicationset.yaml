@@ -21,8 +21,12 @@ spec:
       finalizers:
         - resources-finalizer.argocd.argoproj.io
       annotations:
-        argocd-image-updater.argoproj.io/image-list: main=ghcr.io/waddenn/{{.path.basename}}:main
-        argocd-image-updater.argoproj.io/main.update-strategy: digest
+        # On suit deux images par app (api + worker). Le suffixe est traité
+        # comme une simple convention de nommage : si l'app n'a pas d'image
+        # avec ce suffixe, l'updater ignore silencieusement.
+        argocd-image-updater.argoproj.io/image-list: api=ghcr.io/waddenn/{{.path.basename}}-api:main,worker=ghcr.io/waddenn/{{.path.basename}}-worker:main
+        argocd-image-updater.argoproj.io/api.update-strategy: digest
+        argocd-image-updater.argoproj.io/worker.update-strategy: digest
         argocd-image-updater.argoproj.io/write-back-method: git
         argocd-image-updater.argoproj.io/git-branch: main
         argocd-image-updater.argoproj.io/write-back-target: kustomization

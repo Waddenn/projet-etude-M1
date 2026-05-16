@@ -1,11 +1,18 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: projet-etude-app-demo
+  name: projet-etude-app-demo-api
 spec:
+  # Exclut explicitement les pods marqués chaos.partition=on : ces pods
+  # tombent alors uniquement sous la NP chaos-partition (deny-all). NP K8s
+  # étant additives, c'est le seul moyen de simuler un isolement réseau ciblé.
   podSelector:
     matchLabels:
       app.kubernetes.io/name: projet-etude-app-demo
+      app.kubernetes.io/component: api
+    matchExpressions:
+      - key: chaos.partition
+        operator: DoesNotExist
   policyTypes: [Ingress, Egress]
   ingress:
     # ingress controller (Traefik in kube-system) + Prometheus scraping
@@ -30,11 +37,81 @@ spec:
           protocol: UDP
         - port: 53
           protocol: TCP
-    # Postgres (CNPG) — same namespace
+    # Postgres (CNPG) — même namespace
     - to:
         - podSelector:
             matchLabels:
               cnpg.io/cluster: ticketdb
       ports:
         - port: 5432
+          protocol: TCP
+    # Tempo OTLP gRPC dans monitoring
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4317
+          protocol: TCP
+    # Dex (OIDC) dans le namespace security
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: security
+      ports:
+        - port: 5556
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: projet-etude-app-demo-worker
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: projet-etude-app-demo
+      app.kubernetes.io/component: worker
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # uniquement Prometheus scrape (port metrics)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8081
+          protocol: TCP
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Postgres (CNPG)
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: ticketdb
+      ports:
+        - port: 5432
+          protocol: TCP
+    # Tempo OTLP gRPC dans monitoring
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4317
+          protocol: TCP
+    # Webhook sortant : HTTPS public (Slack/Teams). À restreindre via FQDN
+    # policy si Cilium est déployé. Ouvert ici pour la démo.
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 443
           protocol: TCP

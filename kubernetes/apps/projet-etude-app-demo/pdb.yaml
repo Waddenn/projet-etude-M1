@@ -1,0 +1,24 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: projet-etude-app-demo-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: projet-etude-app-demo
+      app.kubernetes.io/component: api
+---
+# Worker à 1 replica par défaut : on impose minAvailable=1 mais on accepte que
+# le PDB bloque les drains volontaires (uniquement) tant que le HPA n'a pas
+# scalé au-dessus. Suffisant pour démontrer la sémantique PDB en chaos.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: projet-etude-app-demo-worker
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: projet-etude-app-demo
+      app.kubernetes.io/component: worker

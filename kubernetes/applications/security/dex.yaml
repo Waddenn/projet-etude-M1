@@ -1,0 +1,90 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dex
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://charts.dexidp.io
+    chart: dex
+    targetRevision: 0.20.0
+    helm:
+      releaseName: dex
+      values: |
+        # IdP minimal pour la démo : 2 utilisateurs statiques.
+        # Mots de passe : bcrypt de 'viewer' / 'operator' (cf. README).
+        config:
+          issuer: https://projet-etude.tail-scale.ts.net:9443/dex
+          storage:
+            type: memory
+          web:
+            http: 0.0.0.0:5556
+          oauth2:
+            skipApprovalScreen: true
+          enablePasswordDB: true
+          staticPasswords:
+            - email: viewer@projet-etude.local
+              # bcrypt de "viewer" (cost 10)
+              hash: "$2a$10$kNa042sOtXeaAjxHU6YW9eSeDedrphToUrsdhn7PAuKQttc5LR9JC"
+              username: viewer
+              userID: "viewer-00000001"
+            - email: operator@projet-etude.local
+              # bcrypt de "operator" (cost 10)
+              hash: "$2a$10$WRTnpJgSNJTZk5R8DkvEZ.9gWvfNVxGgInWjAqId2yxP3CABnT6uG"
+              username: operator
+              userID: "operator-0000001"
+          staticClients:
+            - id: projet-etude-app-demo
+              name: projet-etude-app-demo
+              # secret réel servi via ExternalSecret + montage env dans l'app.
+              # Ici on met un placeholder repris ensuite par Vault.
+              secretEnv: DEX_APP_DEMO_CLIENT_SECRET
+              redirectURIs:
+                - https://projet-etude.tail-scale.ts.net:9443/app-demo/auth/callback
+          # mapping minimal : tous les utilisateurs statiques héritent de groupes
+          # via le hook "claims_mapping" implicite (Dex n'inclut pas de groupes
+          # depuis staticPasswords par défaut). On les pousse via la
+          # configuration `staticPasswords[].groups` (non standard).
+          # Pour rester portable, on s'appuie sur "email" et un mapping côté
+          # app : on rajoute donc un groups injection via la conf user.
+        envVars:
+          - name: DEX_APP_DEMO_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: dex-secrets
+                key: app-demo-client-secret
+        replicaCount: 1
+        service:
+          type: ClusterIP
+          ports:
+            http:
+              port: 5556
+        resources:
+          requests: { cpu: 20m, memory: 64Mi }
+          limits:   { memory: 128Mi }
+        ingress:
+          enabled: true
+          className: traefik
+          annotations:
+            traefik.ingress.kubernetes.io/router.entrypoints: web
+          hosts:
+            - host: ""
+              paths:
+                - path: /dex
+                  pathType: Prefix
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: security
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }

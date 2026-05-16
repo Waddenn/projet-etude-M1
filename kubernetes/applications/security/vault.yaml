@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vault
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://helm.releases.hashicorp.com
+    chart: vault
+    targetRevision: 0.31.0
+    helm:
+      releaseName: vault
+      values: |
+        # Vault en mode "dev" : auto-unseal avec un root token statique.
+        # Acceptable pour le lab (cf. cahier des charges projet d'étude),
+        # interdit en prod : pas de HA, mémoire volatile, token connu.
+        # Pour la démo, c'est ce qui permet à ExternalSecrets de se
+        # connecter sans cérémonie d'unseal manuelle.
+        server:
+          dev:
+            enabled: true
+            devRootToken: "root-dev-token"
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits:   { memory: 256Mi }
+          readinessProbe:
+            enabled: true
+            path: "/v1/sys/health?standbyok=true&uninitcode=204"
+          dataStorage:
+            enabled: false
+          standalone:
+            enabled: false
+        injector:
+          enabled: false  # on passe par External Secrets, pas par sidecar
+        ui:
+          enabled: true
+          serviceType: ClusterIP
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: security
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff: { duration: 30s, factor: 2, maxDuration: 5m }

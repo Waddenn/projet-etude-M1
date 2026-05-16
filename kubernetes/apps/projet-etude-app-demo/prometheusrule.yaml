@@ -6,14 +6,63 @@ metadata:
     app.kubernetes.io/name: projet-etude-app-demo
 spec:
   groups:
-    - name: projet-etude-app-demo.rules
+    # Enregistrement : ratio d'erreurs HTTP par fenêtre. On le pré-calcule pour
+    # garder les expressions burn-rate lisibles et limiter le coût de requête.
+    - name: projet-etude-app-demo.recording
+      interval: 30s
       rules:
-        - alert: AppDemoHighErrorRate
+        - record: appdemo:http_errors:ratio_rate5m
           expr: |
             sum(rate(http_requests_total{namespace="projet-etude-app-demo",status=~"5.."}[5m]))
               /
-            sum(rate(http_requests_total{namespace="projet-etude-app-demo"}[5m]))
-              > 0.05
+            clamp_min(sum(rate(http_requests_total{namespace="projet-etude-app-demo"}[5m])), 0.001)
+        - record: appdemo:http_errors:ratio_rate30m
+          expr: |
+            sum(rate(http_requests_total{namespace="projet-etude-app-demo",status=~"5.."}[30m]))
+              /
+            clamp_min(sum(rate(http_requests_total{namespace="projet-etude-app-demo"}[30m])), 0.001)
+        - record: appdemo:http_errors:ratio_rate1h
+          expr: |
+            sum(rate(http_requests_total{namespace="projet-etude-app-demo",status=~"5.."}[1h]))
+              /
+            clamp_min(sum(rate(http_requests_total{namespace="projet-etude-app-demo"}[1h])), 0.001)
+        - record: appdemo:http_errors:ratio_rate6h
+          expr: |
+            sum(rate(http_requests_total{namespace="projet-etude-app-demo",status=~"5.."}[6h]))
+              /
+            clamp_min(sum(rate(http_requests_total{namespace="projet-etude-app-demo"}[6h])), 0.001)
+
+    # Burn-rate multi-fenêtres pour un SLO 99,5 % (budget d'erreur = 0,005).
+    # Fast burn : on consomme 2 % du budget en 1 h  (taux = 14,4 × 0,005)
+    # Slow burn : on consomme 5 % du budget en 6 h  (taux = 6   × 0,005)
+    # Référence : Google SRE Workbook, Alerting on SLOs.
+    - name: projet-etude-app-demo.slo
+      rules:
+        - alert: AppDemoSLOErrorBudgetBurnFast
+          expr: |
+            appdemo:http_errors:ratio_rate5m  > (14.4 * 0.005)
+              and
+            appdemo:http_errors:ratio_rate1h  > (14.4 * 0.005)
+          for: 2m
+          labels: { severity: critical, slo: availability }
+          annotations:
+            summary: "App demo: burn-rate rapide (2% du budget d'erreur en 1h)"
+            description: "Le taux d'erreur 5xx sur 5m ET 1h dépasse 14.4x le SLO 99.5%. Pager."
+        - alert: AppDemoSLOErrorBudgetBurnSlow
+          expr: |
+            appdemo:http_errors:ratio_rate30m > (6 * 0.005)
+              and
+            appdemo:http_errors:ratio_rate6h  > (6 * 0.005)
+          for: 15m
+          labels: { severity: warning, slo: availability }
+          annotations:
+            summary: "App demo: burn-rate lent (5% du budget en 6h)"
+            description: "Erreurs 5xx soutenues sur 30m ET 6h au-dessus de 6x le SLO."
+
+    - name: projet-etude-app-demo.rules
+      rules:
+        - alert: AppDemoHighErrorRate
+          expr: appdemo:http_errors:ratio_rate5m > 0.05
           for: 5m
           labels: { severity: warning }
           annotations:
@@ -33,3 +82,19 @@ spec:
           labels: { severity: info }
           annotations:
             summary: "App demo: plus de 50 incidents ouverts"
+        - alert: AppDemoJobQueueBacklog
+          expr: max(jobs_queue_depth{namespace="projet-etude-app-demo"}) > 50
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "App demo: backlog worker > 50 jobs depuis 5 min"
+        - alert: AppDemoJobErrorRate
+          expr: |
+            sum(rate(jobs_processed_total{namespace="projet-etude-app-demo",outcome="error"}[10m]))
+              /
+            clamp_min(sum(rate(jobs_processed_total{namespace="projet-etude-app-demo"}[10m])), 0.001)
+              > 0.2
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "App demo: >20% des jobs échouent sur 10 min"
