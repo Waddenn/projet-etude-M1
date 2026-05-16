@@ -22,6 +22,6 @@ images:
 - name: ghcr.io/waddenn/projet-etude-app-demo-api
   newTag: main
 - name: ghcr.io/waddenn/projet-etude-app-demo-worker
-  newTag: main
+  digest: sha256:9be130f2ec731a64fd3f0fa43fccc364594159409868dca056ed1b81b4981b84
 - name: ghcr.io/waddenn/projet-etude-app-demo-audit-purge
   newTag: main
